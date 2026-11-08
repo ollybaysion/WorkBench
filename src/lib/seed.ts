@@ -1,5 +1,6 @@
 import type { Note, Command, Runbook, Task, EnvPreset } from '../types'
 import { now, todayStr } from './util'
+import { seedBoardCommands } from './seedBoard'
 
 const t = now()
 const base = (id: string, tags: string[]) => ({ id, createdAt: t, updatedAt: t, tags })
@@ -832,6 +833,7 @@ export const seedCommands: Command[] = [
     usageCount: 19,
   },
   ...serverCommands,
+  ...seedBoardCommands,
 ]
 
 export const seedRunbooks: Runbook[] = [

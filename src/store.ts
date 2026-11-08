@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { db } from './db'
-import type { Note, Command, Runbook, RunbookRun, Task, EnvPreset, Settings, ExportBundle } from './types'
+import type { Note, Command, Runbook, RunbookRun, Task, EnvPreset, Settings, ExportBundle, Connection, Card, Board } from './types'
 import { seedCommands, seedEnvs, seedNotes, seedRunbooks, seedTasks } from './lib/seed'
+import { seedBoardCommands, seedBoards, seedCards, seedConnections } from './lib/seedBoard'
 import { now } from './lib/util'
 
 const defaultSettings: Settings = { theme: 'system', userName: '', activeEnvId: 'env_prod' }
@@ -14,6 +15,9 @@ interface State {
   runs: RunbookRun[]
   tasks: Task[]
   envs: EnvPreset[]
+  connections: Connection[]
+  cards: Card[]
+  boards: Board[]
   settings: Settings
   toast: string | null
   paletteOpen: boolean
@@ -35,6 +39,12 @@ interface State {
   deleteTask: (id: string) => Promise<void>
   upsertEnv: (e: EnvPreset) => Promise<void>
   deleteEnv: (id: string) => Promise<void>
+  upsertConnection: (c: Connection) => Promise<void>
+  deleteConnection: (id: string) => Promise<void>
+  upsertCard: (c: Card) => Promise<void>
+  deleteCard: (id: string) => Promise<void>
+  upsertBoard: (b: Board) => Promise<void>
+  deleteBoard: (id: string) => Promise<void>
 
   activeEnv: () => EnvPreset | undefined
   exportBundle: () => ExportBundle
@@ -48,6 +58,8 @@ function sortByUpdated<T extends { updatedAt: string }>(arr: T[]): T[] {
   return [...arr].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
 }
 
+const ALL_TABLES = [db.notes, db.commands, db.runbooks, db.runs, db.tasks, db.envs, db.connections, db.cards, db.boards, db.kv]
+
 export const useStore = create<State>((set, get) => ({
   ready: false,
   notes: [],
@@ -56,6 +68,9 @@ export const useStore = create<State>((set, get) => ({
   runs: [],
   tasks: [],
   envs: [],
+  connections: [],
+  cards: [],
+  boards: [],
   settings: defaultSettings,
   toast: null,
   paletteOpen: false,
@@ -73,13 +88,26 @@ export const useStore = create<State>((set, get) => ({
         await db.kv.put({ key: 'settings', value: defaultSettings })
       })
     }
-    const [notes, commands, runbooks, runs, tasks, envs, s] = await Promise.all([
+    // 작업대 시드는 `seeded` 와 별개로 cards 테이블이 비어 있으면 넣는다(이미 쓰는 브라우저에도 들어가야 하므로)
+    if ((await db.cards.count()) === 0) {
+      await db.transaction('rw', [db.connections, db.cards, db.boards, db.commands], async () => {
+        await db.connections.bulkPut(seedConnections)
+        await db.cards.bulkPut(seedCards)
+        await db.boards.bulkPut(seedBoards)
+        const have = await db.commands.bulkGet(seedBoardCommands.map((c) => c.id))
+        await db.commands.bulkPut(seedBoardCommands.filter((_, i) => !have[i]))
+      })
+    }
+    const [notes, commands, runbooks, runs, tasks, envs, connections, cards, boards, s] = await Promise.all([
       db.notes.toArray(),
       db.commands.toArray(),
       db.runbooks.toArray(),
       db.runs.toArray(),
       db.tasks.toArray(),
       db.envs.toArray(),
+      db.connections.toArray(),
+      db.cards.toArray(),
+      db.boards.toArray(),
       db.kv.get('settings'),
     ])
     set({
@@ -90,6 +118,9 @@ export const useStore = create<State>((set, get) => ({
       runs: [...runs].sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1)),
       tasks: sortByUpdated(tasks),
       envs,
+      connections: sortByUpdated(connections),
+      cards: sortByUpdated(cards),
+      boards: sortByUpdated(boards),
       settings: { ...defaultSettings, ...((s?.value as Partial<Settings>) ?? {}) },
     })
   },
@@ -163,6 +194,41 @@ export const useStore = create<State>((set, get) => ({
     set({ envs: get().envs.filter((x) => x.id !== id) })
     if (get().settings.activeEnvId === id) await get().setSettings({ activeEnvId: get().envs[0]?.id })
   },
+  upsertConnection: async (c) => {
+    c = { ...c, updatedAt: now() }
+    await db.connections.put(c)
+    set({ connections: sortByUpdated([c, ...get().connections.filter((x) => x.id !== c.id)]) })
+  },
+  deleteConnection: async (id) => {
+    await db.connections.delete(id)
+    set({ connections: get().connections.filter((x) => x.id !== id) })
+  },
+  upsertCard: async (c) => {
+    c = { ...c, updatedAt: now() }
+    await db.cards.put(c)
+    set({ cards: sortByUpdated([c, ...get().cards.filter((x) => x.id !== c.id)]) })
+  },
+  deleteCard: async (id) => {
+    // 모든 보드의 cells 에서도 뺀다
+    const touched = get()
+      .boards.filter((b) => b.cells.some((cell) => cell.cardId === id))
+      .map((b) => ({ ...b, cells: b.cells.filter((cell) => cell.cardId !== id), updatedAt: now() }))
+    await db.transaction('rw', [db.cards, db.boards], async () => {
+      await db.cards.delete(id)
+      await db.boards.bulkPut(touched)
+    })
+    const ids = new Set(touched.map((b) => b.id))
+    set({ cards: get().cards.filter((x) => x.id !== id), boards: sortByUpdated([...touched, ...get().boards.filter((b) => !ids.has(b.id))]) })
+  },
+  upsertBoard: async (b) => {
+    b = { ...b, updatedAt: now() }
+    await db.boards.put(b)
+    set({ boards: sortByUpdated([b, ...get().boards.filter((x) => x.id !== b.id)]) })
+  },
+  deleteBoard: async (id) => {
+    await db.boards.delete(id)
+    set({ boards: get().boards.filter((x) => x.id !== id) })
+  },
 
   activeEnv: () => {
     const { envs, settings } = get()
@@ -182,14 +248,17 @@ export const useStore = create<State>((set, get) => ({
       tasks: s.tasks,
       envs: s.envs,
       settings: s.settings,
+      connections: s.connections,
+      cards: s.cards,
+      boards: s.boards,
     }
   },
 
   importBundle: async (b, mode) => {
     if (b.app !== 'workbench') throw new Error('WorkBench 내보내기 파일이 아닙니다.')
-    await db.transaction('rw', [db.notes, db.commands, db.runbooks, db.runs, db.tasks, db.envs, db.kv], async () => {
+    await db.transaction('rw', ALL_TABLES, async () => {
       if (mode === 'replace') {
-        await Promise.all([db.notes.clear(), db.commands.clear(), db.runbooks.clear(), db.runs.clear(), db.tasks.clear(), db.envs.clear()])
+        await Promise.all(ALL_TABLES.filter((t) => t !== db.kv).map((t) => t.clear()))
       }
       await db.notes.bulkPut(b.notes ?? [])
       await db.commands.bulkPut(b.commands ?? [])
@@ -197,6 +266,9 @@ export const useStore = create<State>((set, get) => ({
       await db.runs.bulkPut(b.runs ?? [])
       await db.tasks.bulkPut(b.tasks ?? [])
       await db.envs.bulkPut(b.envs ?? [])
+      await db.connections.bulkPut(b.connections ?? [])
+      await db.cards.bulkPut(b.cards ?? [])
+      await db.boards.bulkPut(b.boards ?? [])
       if (mode === 'replace' && b.settings) await db.kv.put({ key: 'settings', value: b.settings })
       await db.kv.put({ key: 'seeded', value: true })
     })
@@ -204,8 +276,8 @@ export const useStore = create<State>((set, get) => ({
   },
 
   resetToSeed: async () => {
-    await db.transaction('rw', [db.notes, db.commands, db.runbooks, db.runs, db.tasks, db.envs, db.kv], async () => {
-      await Promise.all([db.notes.clear(), db.commands.clear(), db.runbooks.clear(), db.runs.clear(), db.tasks.clear(), db.envs.clear(), db.kv.clear()])
+    await db.transaction('rw', ALL_TABLES, async () => {
+      await Promise.all(ALL_TABLES.map((t) => t.clear()))
     })
     await get().init()
   },

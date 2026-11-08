@@ -26,6 +26,19 @@ export function fmtDate(iso?: string): string {
   return new Date(iso).toLocaleString('ko-KR', { hour12: false })
 }
 
+/** 400 → '0.4 s' */
+export function fmtSec(ms: number): string {
+  return `${(ms / 1000).toFixed(1)} s`
+}
+
+/** HH:MM:SS */
+export function fmtTime(iso?: string): string {
+  if (!iso) return '-'
+  const d = new Date(iso)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
 export function todayStr(): string {
   const d = new Date()
   const p = (n: number) => String(n).padStart(2, '0')

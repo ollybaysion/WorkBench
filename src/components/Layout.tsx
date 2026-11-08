@@ -13,6 +13,7 @@ export default function Layout() {
   const notes = useStore((s) => s.notes.length)
   const commands = useStore((s) => s.commands.length)
   const runbooks = useStore((s) => s.runbooks.length)
+  const boards = useStore((s) => s.boards.length)
   const openTasks = useStore((s) => s.tasks.filter((t) => t.status !== 'done').length)
   const envs = useStore((s) => s.envs)
   const settings = useStore((s) => s.settings)
@@ -38,6 +39,7 @@ export default function Layout() {
           </button>
         </div>
         <NavLink to="/" end className={cls}>🏠 대시보드</NavLink>
+        <NavLink to="/board" className={cls}>📊 작업대 <span className="n">{boards}</span></NavLink>
         <NavLink to="/notes" className={cls}>📚 지식 베이스 <span className="n">{notes}</span></NavLink>
         <NavLink to="/commands" className={cls}>⌘ 명령어 <span className="n">{commands}</span></NavLink>
         <NavLink to="/runbooks" className={cls}>🔁 런북 <span className="n">{runbooks}</span></NavLink>
