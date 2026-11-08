@@ -36,6 +36,7 @@ body {
 }
 code, pre, kbd, .mono, textarea.mono, input.mono {
   font-family: "JetBrains Mono", Consolas, "Cascadia Code", "Courier New", monospace;
+  font-variant-ligatures: none; /* 명령의 ++ · == · |> 가 합자 없이 글자 그대로 보이게 */
 }
 a { color: var(--accent); }
 button { font-family: inherit; }
@@ -189,9 +190,12 @@ pre.code { background: var(--code-bg); color: var(--code-text); padding: 12px 14
 .md ul, .md ol { padding-left: 22px; margin: 6px 0; }
 .md code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
 .md pre code { background: none; padding: 0; font-size: 13px; }
+.md .tbl { overflow-x: auto; margin: 8px 0; }
 .md table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0; }
-.md th, .md td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
+.md .tbl table { margin: 0; }
+.md th, .md td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; vertical-align: top; }
 .md th { background: var(--surface-2); }
+.md td:first-child code { white-space: nowrap; }
 .md blockquote { margin: 8px 0; padding: 4px 12px; border-left: 3px solid var(--border); color: var(--muted); }
 .md a.wiki { background: var(--accent-soft); padding: 0 4px; border-radius: 4px; text-decoration: none; }
 
