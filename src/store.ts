@@ -55,6 +55,12 @@ interface State {
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 
+/** 읽기 토큰을 뺀 설정. 내보내기 파일과 가져오기 파일은 토큰을 싣지 않는다. */
+function withoutToken(s: Settings): Settings {
+  const { akgToken: _secret, ...rest } = s
+  return rest
+}
+
 function sortByUpdated<T extends { updatedAt: string }>(arr: T[]): T[] {
   return [...arr].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
 }
@@ -256,7 +262,7 @@ export const useStore = create<State>((set, get) => ({
       runs: s.runs,
       tasks: s.tasks,
       envs: s.envs,
-      settings: s.settings,
+      settings: withoutToken(s.settings),
       connections: s.connections,
       cards: s.cards,
       boards: s.boards,
@@ -265,6 +271,8 @@ export const useStore = create<State>((set, get) => ({
 
   importBundle: async (b, mode) => {
     if (b.app !== 'workbench') throw new Error('WorkBench 내보내기 파일이 아닙니다.')
+    const token = get().settings.akgToken
+    const keepToken = token ? { akgToken: token } : {}
     await db.transaction('rw', ALL_TABLES, async () => {
       if (mode === 'replace') {
         await Promise.all(ALL_TABLES.filter((t) => t !== db.kv).map((t) => t.clear()))
@@ -278,7 +286,8 @@ export const useStore = create<State>((set, get) => ({
       await db.connections.bulkPut(b.connections ?? [])
       await db.cards.bulkPut(b.cards ?? [])
       await db.boards.bulkPut(b.boards ?? [])
-      if (mode === 'replace' && b.settings) await db.kv.put({ key: 'settings', value: b.settings })
+      // 읽기 토큰은 파일에서 받지 않는다. 지금 브라우저의 토큰을 그대로 둔다.
+      if (mode === 'replace' && b.settings) await db.kv.put({ key: 'settings', value: { ...withoutToken(b.settings), ...keepToken } })
       await db.kv.put({ key: 'seeded', value: true })
     })
     await get().init()

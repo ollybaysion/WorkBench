@@ -5,6 +5,7 @@ import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import BoardPage from './pages/Board'
 import Notes from './pages/Notes'
+import AkgDocs from './pages/AkgDocs'
 import Commands from './pages/Commands'
 import Runbooks from './pages/Runbooks'
 import Toolbox from './pages/Toolbox'
@@ -37,6 +38,7 @@ export default function App() {
           <Route path="board/:id" element={<BoardPage />} />
           <Route path="notes" element={<Notes />} />
           <Route path="notes/:id" element={<Notes />} />
+          <Route path="akg" element={<AkgDocs />} />
           <Route path="commands" element={<Commands />} />
           <Route path="commands/:id" element={<Commands />} />
           <Route path="runbooks" element={<Runbooks />} />

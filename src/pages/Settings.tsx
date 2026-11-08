@@ -2,6 +2,8 @@ import { useRef, useState } from 'react'
 import { useStore } from '../store'
 import type { EnvPreset, ExportBundle, Settings } from '../types'
 import { fmtDate, kvToText, parseKV, relTime, uid } from '../lib/util'
+import { AKG_TOKEN_RE, akgTokenPage, checkAkg, normalizeAkgUrl } from '../lib/akg'
+import type { AkgCheck } from '../lib/akg'
 import Topbar from '../components/Topbar'
 import { exportBackup } from '../components/backup'
 
@@ -122,6 +124,8 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      <AkgSettings />
+
       <div className="panel" style={{ marginTop: 14 }}>
         <h4>
           🌐 환경 프리셋
@@ -145,6 +149,112 @@ export default function SettingsPage() {
         </div>
       </div>
     </>
+  )
+}
+
+type Check = { busy: true } | ({ busy: false } & AkgCheck)
+
+function AkgSettings() {
+  const saved = useStore((s) => s.settings)
+  const setSettings = useStore((s) => s.setSettings)
+  const showToast = useStore((s) => s.showToast)
+  const [url, setUrl] = useState(saved.akgUrl ?? '')
+  const [token, setToken] = useState(saved.akgToken ?? '')
+  const [reveal, setReveal] = useState(false)
+  const [check, setCheck] = useState<Check | null>(null)
+
+  const cleanUrl = normalizeAkgUrl(url)
+  const cleanToken = token.trim()
+  const badToken = cleanToken !== '' && !AKG_TOKEN_RE.test(cleanToken)
+
+  const save = async () => {
+    if (badToken) return showToast('토큰 꼴을 고친 뒤 저장하세요')
+    setUrl(cleanUrl)
+    setToken(cleanToken)
+    await setSettings({ akgUrl: cleanUrl, akgToken: cleanToken })
+    showToast('AKG 설정을 저장했습니다')
+  }
+
+  const verify = async () => {
+    if (!cleanUrl) return setCheck({ busy: false, ok: false, msg: '주소를 먼저 넣으세요' })
+    if (badToken) return setCheck({ busy: false, ok: false, msg: '토큰 꼴을 먼저 고치세요' })
+    setCheck({ busy: true })
+    setCheck({ busy: false, ...(await checkAkg(cleanUrl, cleanToken)) })
+  }
+
+  return (
+    <div className="panel form-col" style={{ marginTop: 14 }}>
+      <h4>
+        📖 AKG 지식 허브
+        <span className="small muted" style={{ fontWeight: 400 }}>
+          AKG 문서를 검색해서 봅니다. 편집은 AKG 화면에서 합니다.
+        </span>
+      </h4>
+      <label className="field">
+        AKG 주소
+        <input
+          className="mono"
+          value={url}
+          onChange={(e) => {
+            setUrl(e.target.value)
+            setCheck(null)
+          }}
+          placeholder="http://akg.fdc.localhost:8000"
+          spellCheck={false}
+        />
+      </label>
+      <div className="field">
+        <label htmlFor="akg-token">읽기 토큰</label>
+        <div className="akg-token">
+          <input
+            id="akg-token"
+            className="input mono"
+            type={reveal ? 'text' : 'password'}
+            value={token}
+            onChange={(e) => {
+              setToken(e.target.value)
+              setCheck(null)
+            }}
+            placeholder="akgr_…"
+            autoComplete="off"
+            spellCheck={false}
+            aria-invalid={badToken}
+            aria-describedby="akg-token-help"
+          />
+          <button type="button" className="btn" onClick={() => setReveal((v) => !v)} aria-pressed={reveal}>
+            {reveal ? '가리기' : '보기'}
+          </button>
+          {cleanUrl ? (
+            <a className="btn" href={akgTokenPage(cleanUrl)} target="_blank" rel="noreferrer">
+              토큰 발급 화면 열기 ↗
+            </a>
+          ) : (
+            <button type="button" className="btn" disabled title="AKG 주소를 먼저 넣으세요">
+              토큰 발급 화면 열기 ↗
+            </button>
+          )}
+        </div>
+        <span id="akg-token-help" className={'small' + (badToken ? ' akg-check bad' : ' muted')}>
+          {badToken ? '토큰 꼴이 맞지 않습니다. akgr_ 로 시작하는 48 자입니다.' : 'AKG 화면(로그인한 탭)에서 개인 읽기 토큰을 발급받아 붙여 넣으세요.'}
+        </span>
+      </div>
+      <div className="btn-row">
+        <button type="button" className="btn primary" onClick={() => void save()}>
+          저장
+        </button>
+        <button type="button" className="btn" onClick={() => void verify()} disabled={check?.busy === true}>
+          연결 확인
+        </button>
+        {check && (
+          <span className={'small akg-check' + (check.busy ? ' muted' : check.ok ? ' ok' : ' bad')} role="status">
+            {check.busy ? '확인하는 중…' : check.msg}
+          </span>
+        )}
+      </div>
+      <div className="note-box">
+        토큰은 이 브라우저(IndexedDB)에만 둡니다. JSON 내보내기 · 가져오기는 토큰을 건너뜁니다. 토큰이 새면 AKG 발급 화면에서 폐기하세요.
+      </div>
+    </div>
   )
 }
 
