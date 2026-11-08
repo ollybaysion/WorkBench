@@ -3,6 +3,7 @@ import { db } from './db'
 import type { Note, Command, Runbook, RunbookRun, Task, EnvPreset, Settings, ExportBundle, Connection, Card, Board } from './types'
 import { seedCommands, seedEnvs, seedNotes, seedRunbooks, seedTasks } from './lib/seed'
 import { seedBoardCommands, seedBoards, seedCards, seedConnections } from './lib/seedBoard'
+import { cheatsheetNotes } from './lib/cheatsheets'
 import { now } from './lib/util'
 
 const defaultSettings: Settings = { theme: 'system', userName: '', activeEnvId: 'env_prod' }
@@ -85,7 +86,15 @@ export const useStore = create<State>((set, get) => ({
         await db.tasks.bulkPut(seedTasks)
         await db.envs.bulkPut(seedEnvs)
         await db.kv.put({ key: 'seeded', value: true })
+        await db.kv.put({ key: 'seeded_cheatsheet', value: true })
         await db.kv.put({ key: 'settings', value: defaultSettings })
+      })
+    } else if (!(await db.kv.get('seeded_cheatsheet'))) {
+      // 이미 쓰던 브라우저: 치트시트 노트를 한 번만 더한다. 있는 id 는 건드리지 않는다.
+      await db.transaction('rw', [db.notes, db.kv], async () => {
+        const have = await db.notes.bulkGet(cheatsheetNotes.map((n) => n.id))
+        await db.notes.bulkPut(cheatsheetNotes.filter((_, i) => !have[i]))
+        await db.kv.put({ key: 'seeded_cheatsheet', value: true })
       })
     }
     // 작업대 시드는 `seeded` 와 별개로 cards 테이블이 비어 있으면 넣는다(이미 쓰는 브라우저에도 들어가야 하므로)

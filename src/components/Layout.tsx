@@ -1,6 +1,8 @@
+import { useMemo } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useStore } from '../store'
 import { relTime } from '../lib/util'
+import { CHEATSHEET_FOLDER } from '../lib/cheatsheets'
 import CommandPalette from './CommandPalette'
 import { exportBackup } from './backup'
 
@@ -10,7 +12,11 @@ const THEME_ICON: Record<Theme, string> = { system: '🌓', light: '☀️', dar
 const THEME_LABEL: Record<Theme, string> = { system: '시스템', light: '라이트', dark: '다크' }
 
 export default function Layout() {
-  const notes = useStore((s) => s.notes.length)
+  const notes = useStore((s) => s.notes)
+  const cheatsheets = useMemo(
+    () => notes.filter((n) => n.folder === CHEATSHEET_FOLDER).sort((a, b) => a.title.localeCompare(b.title, 'ko')),
+    [notes],
+  )
   const commands = useStore((s) => s.commands.length)
   const runbooks = useStore((s) => s.runbooks.length)
   const boards = useStore((s) => s.boards.length)
@@ -40,12 +46,22 @@ export default function Layout() {
         </div>
         <NavLink to="/" end className={cls}>🏠 대시보드</NavLink>
         <NavLink to="/board" className={cls}>📊 작업대 <span className="n">{boards}</span></NavLink>
-        <NavLink to="/notes" className={cls}>📚 지식 베이스 <span className="n">{notes}</span></NavLink>
+        <NavLink to="/notes" className={cls}>📚 지식 베이스 <span className="n">{notes.length}</span></NavLink>
         <NavLink to="/commands" className={cls}>⌘ 명령어 <span className="n">{commands}</span></NavLink>
         <NavLink to="/runbooks" className={cls}>🔁 런북 <span className="n">{runbooks}</span></NavLink>
         <NavLink to="/toolbox" className={cls}>🧰 도구함</NavLink>
         <NavLink to="/tasks" className={cls}>📋 업무 보드 <span className="n">{openTasks}</span></NavLink>
         <NavLink to="/settings" className={cls}>⚙️ 설정</NavLink>
+        {cheatsheets.length > 0 && (
+          <>
+            <div className="sec">치트시트</div>
+            {cheatsheets.map((n) => (
+              <NavLink key={n.id} to={`/notes/${n.id}`} className={cls}>
+                📄 {n.title.replace(/\s*치트시트$/, '')}
+              </NavLink>
+            ))}
+          </>
+        )}
         <div className="sec">환경</div>
         <div style={{ padding: '0 10px' }}>
           <select className="input" value={settings.activeEnvId ?? ''} onChange={(e) => void setSettings({ activeEnvId: e.target.value })}>

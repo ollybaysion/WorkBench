@@ -1,6 +1,7 @@
 import type { Note, Command, Runbook, Task, EnvPreset } from '../types'
 import { now, todayStr } from './util'
 import { seedBoardCommands } from './seedBoard'
+import { cheatsheetNotes } from './cheatsheets'
 
 const t = now()
 const base = (id: string, tags: string[]) => ({ id, createdAt: t, updatedAt: t, tags })
@@ -762,6 +763,7 @@ npm run build      # 프로덕션 빌드
 `,
   },
   ...serverNotes,
+  ...cheatsheetNotes,
 ]
 
 export const seedCommands: Command[] = [

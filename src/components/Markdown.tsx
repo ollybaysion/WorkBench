@@ -53,6 +53,11 @@ export default function Markdown({ content }: { content: string }) {
       const text = textOf(children).replace(/\n$/, '')
       return <CodeBox text={text}>{children}</CodeBox>
     },
+    table: ({ children }) => (
+      <div className="tbl">
+        <table>{children}</table>
+      </div>
+    ),
     a: ({ href, children }) => {
       if (href?.startsWith(WIKI_PREFIX)) {
         const title = decodeURIComponent(href.slice(WIKI_PREFIX.length))
