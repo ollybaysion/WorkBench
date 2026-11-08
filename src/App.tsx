@@ -3,6 +3,7 @@ import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { useStore } from './store'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
+import BoardPage from './pages/Board'
 import Notes from './pages/Notes'
 import Commands from './pages/Commands'
 import Runbooks from './pages/Runbooks'
@@ -32,6 +33,8 @@ export default function App() {
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Dashboard />} />
+          <Route path="board" element={<BoardPage />} />
+          <Route path="board/:id" element={<BoardPage />} />
           <Route path="notes" element={<Notes />} />
           <Route path="notes/:id" element={<Notes />} />
           <Route path="commands" element={<Commands />} />
