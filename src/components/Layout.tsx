@@ -47,6 +47,7 @@ export default function Layout() {
         <NavLink to="/" end className={cls}>🏠 대시보드</NavLink>
         <NavLink to="/board" className={cls}>📊 작업대 <span className="n">{boards}</span></NavLink>
         <NavLink to="/notes" className={cls}>📚 지식 베이스 <span className="n">{notes.length}</span></NavLink>
+        <NavLink to="/akg" className={cls}>📖 AKG 문서</NavLink>
         <NavLink to="/commands" className={cls}>⌘ 명령어 <span className="n">{commands}</span></NavLink>
         <NavLink to="/runbooks" className={cls}>🔁 런북 <span className="n">{runbooks}</span></NavLink>
         <NavLink to="/toolbox" className={cls}>🧰 도구함</NavLink>

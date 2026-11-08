@@ -3,15 +3,15 @@ import type { ReactNode } from 'react'
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import type { Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useStore } from '../store'
 import { copyText } from '../lib/util'
 
 const WIKI_PREFIX = '#wiki:'
 
-/** [[제목]] → [제목](#wiki:제목) (코드 블록 내부는 건드리지 않음) */
+/** [[제목]] → [제목](#wiki:제목) (코드 블록 · 인라인 코드 내부는 건드리지 않음) */
 function convertWikiLinks(src: string): string {
-  const parts = src.split(/(```[\s\S]*?```|`[^`\n]*`)/g)
+  const parts = src.split(/(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)/g)
   return parts
     .map((p, i) => (i % 2 === 1 ? p : p.replace(/\[\[([^\]\n]+)\]\]/g, (_w, t: string) => `[${t}](${WIKI_PREFIX}${encodeURIComponent(t.trim())})`)))
     .join('')
@@ -43,7 +43,18 @@ export function CodeBox({ text, children }: { text: string; children?: ReactNode
   )
 }
 
-export default function Markdown({ content }: { content: string }) {
+interface Props {
+  content: string
+  /**
+   * [[대상]] 을 앱 안 주소로 바꾼다. 주면 노트 · 런북 제목 찾기 대신 이것을 쓴다.
+   * null 을 돌려주면 링크 없이 글자만 그린다.
+   */
+  wikiHref?: (target: string) => string | null
+  /** 그림을 그리는 컴포넌트. 주면 그림 주소(src)를 거르지 않고 그대로 넘긴다. 주소 확인은 이 컴포넌트가 한다. */
+  img?: Components['img']
+}
+
+export default function Markdown({ content, wikiHref, img }: Props) {
   const navigate = useNavigate()
   const notes = useStore((s) => s.notes)
   const runbooks = useStore((s) => s.runbooks)
@@ -61,6 +72,16 @@ export default function Markdown({ content }: { content: string }) {
     a: ({ href, children }) => {
       if (href?.startsWith(WIKI_PREFIX)) {
         const title = decodeURIComponent(href.slice(WIKI_PREFIX.length))
+        if (wikiHref) {
+          const to = wikiHref(title)
+          return to ? (
+            <Link className="wiki" to={to}>
+              {children}
+            </Link>
+          ) : (
+            <>{children}</>
+          )
+        }
         return (
           <a
             className="wiki"
@@ -84,11 +105,12 @@ export default function Markdown({ content }: { content: string }) {
         </a>
       )
     },
+    ...(img ? { img } : {}),
   }
 
   return (
     <div className="md">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components} urlTransform={(url) => (url.startsWith(WIKI_PREFIX) ? url : defaultUrlTransform(url))}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components} urlTransform={(url, key) => (url.startsWith(WIKI_PREFIX) || (img && key === 'src') ? url : defaultUrlTransform(url))}>
         {convertWikiLinks(content)}
       </ReactMarkdown>
     </div>
