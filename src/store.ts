@@ -1,20 +1,17 @@
 import { create } from 'zustand'
 import { db } from './db'
-import type { Note, Command, Runbook, RunbookRun, Task, EnvPreset, Settings, ExportBundle, Connection, Card, Board } from './types'
-import { seedCommands, seedEnvs, seedNotes, seedRunbooks, seedTasks } from './lib/seed'
+import type { Command, Runbook, RunbookRun, EnvPreset, Settings, ExportBundle, Connection, Card, Board } from './types'
+import { seedCommands, seedEnvs, seedRunbooks } from './lib/seed'
 import { seedBoardCommands, seedBoards, seedCards, seedConnections } from './lib/seedBoard'
-import { cheatsheetNotes } from './lib/cheatsheets'
 import { now } from './lib/util'
 
 const defaultSettings: Settings = { theme: 'system', userName: '', activeEnvId: 'env_prod' }
 
 interface State {
   ready: boolean
-  notes: Note[]
   commands: Command[]
   runbooks: Runbook[]
   runs: RunbookRun[]
-  tasks: Task[]
   envs: EnvPreset[]
   connections: Connection[]
   cards: Card[]
@@ -28,16 +25,12 @@ interface State {
   setPalette: (open: boolean) => void
   setSettings: (patch: Partial<Settings>) => Promise<void>
 
-  upsertNote: (n: Note) => Promise<void>
-  deleteNote: (id: string) => Promise<void>
   upsertCommand: (c: Command) => Promise<void>
   deleteCommand: (id: string) => Promise<void>
   upsertRunbook: (r: Runbook) => Promise<void>
   deleteRunbook: (id: string) => Promise<void>
   upsertRun: (r: RunbookRun) => Promise<void>
   deleteRun: (id: string) => Promise<void>
-  upsertTask: (t: Task) => Promise<void>
-  deleteTask: (id: string) => Promise<void>
   upsertEnv: (e: EnvPreset) => Promise<void>
   deleteEnv: (id: string) => Promise<void>
   upsertConnection: (c: Connection) => Promise<void>
@@ -65,15 +58,14 @@ function sortByUpdated<T extends { updatedAt: string }>(arr: T[]): T[] {
   return [...arr].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
 }
 
-const ALL_TABLES = [db.notes, db.commands, db.runbooks, db.runs, db.tasks, db.envs, db.connections, db.cards, db.boards, db.kv]
+// 옛 notes · tasks 테이블은 넣지 않는다. 가져오기(교체) · 초기화가 그 데이터를 지우지 않게 한다
+const ALL_TABLES = [db.commands, db.runbooks, db.runs, db.envs, db.connections, db.cards, db.boards, db.kv]
 
 export const useStore = create<State>((set, get) => ({
   ready: false,
-  notes: [],
   commands: [],
   runbooks: [],
   runs: [],
-  tasks: [],
   envs: [],
   connections: [],
   cards: [],
@@ -85,22 +77,12 @@ export const useStore = create<State>((set, get) => ({
   init: async () => {
     const seeded = await db.kv.get('seeded')
     if (!seeded) {
-      await db.transaction('rw', [db.notes, db.commands, db.runbooks, db.tasks, db.envs, db.kv], async () => {
-        await db.notes.bulkPut(seedNotes)
+      await db.transaction('rw', [db.commands, db.runbooks, db.envs, db.kv], async () => {
         await db.commands.bulkPut(seedCommands)
         await db.runbooks.bulkPut(seedRunbooks)
-        await db.tasks.bulkPut(seedTasks)
         await db.envs.bulkPut(seedEnvs)
         await db.kv.put({ key: 'seeded', value: true })
-        await db.kv.put({ key: 'seeded_cheatsheet', value: true })
         await db.kv.put({ key: 'settings', value: defaultSettings })
-      })
-    } else if (!(await db.kv.get('seeded_cheatsheet'))) {
-      // 이미 쓰던 브라우저: 치트시트 노트를 한 번만 더한다. 있는 id 는 건드리지 않는다.
-      await db.transaction('rw', [db.notes, db.kv], async () => {
-        const have = await db.notes.bulkGet(cheatsheetNotes.map((n) => n.id))
-        await db.notes.bulkPut(cheatsheetNotes.filter((_, i) => !have[i]))
-        await db.kv.put({ key: 'seeded_cheatsheet', value: true })
       })
     }
     // 작업대 시드는 `seeded` 와 별개로 cards 테이블이 비어 있으면 넣는다(이미 쓰는 브라우저에도 들어가야 하므로)
@@ -113,12 +95,10 @@ export const useStore = create<State>((set, get) => ({
         await db.commands.bulkPut(seedBoardCommands.filter((_, i) => !have[i]))
       })
     }
-    const [notes, commands, runbooks, runs, tasks, envs, connections, cards, boards, s] = await Promise.all([
-      db.notes.toArray(),
+    const [commands, runbooks, runs, envs, connections, cards, boards, s] = await Promise.all([
       db.commands.toArray(),
       db.runbooks.toArray(),
       db.runs.toArray(),
-      db.tasks.toArray(),
       db.envs.toArray(),
       db.connections.toArray(),
       db.cards.toArray(),
@@ -127,11 +107,9 @@ export const useStore = create<State>((set, get) => ({
     ])
     set({
       ready: true,
-      notes: sortByUpdated(notes),
       commands: sortByUpdated(commands),
       runbooks: sortByUpdated(runbooks),
       runs: [...runs].sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1)),
-      tasks: sortByUpdated(tasks),
       envs,
       connections: sortByUpdated(connections),
       cards: sortByUpdated(cards),
@@ -153,15 +131,6 @@ export const useStore = create<State>((set, get) => ({
     set({ settings })
   },
 
-  upsertNote: async (n) => {
-    n = { ...n, updatedAt: now() }
-    await db.notes.put(n)
-    set({ notes: sortByUpdated([n, ...get().notes.filter((x) => x.id !== n.id)]) })
-  },
-  deleteNote: async (id) => {
-    await db.notes.delete(id)
-    set({ notes: get().notes.filter((x) => x.id !== id) })
-  },
   upsertCommand: async (c) => {
     c = { ...c, updatedAt: now() }
     await db.commands.put(c)
@@ -189,15 +158,6 @@ export const useStore = create<State>((set, get) => ({
   deleteRun: async (id) => {
     await db.runs.delete(id)
     set({ runs: get().runs.filter((x) => x.id !== id) })
-  },
-  upsertTask: async (t) => {
-    t = { ...t, updatedAt: now() }
-    await db.tasks.put(t)
-    set({ tasks: sortByUpdated([t, ...get().tasks.filter((x) => x.id !== t.id)]) })
-  },
-  deleteTask: async (id) => {
-    await db.tasks.delete(id)
-    set({ tasks: get().tasks.filter((x) => x.id !== id) })
   },
   upsertEnv: async (e) => {
     await db.envs.put(e)
@@ -256,11 +216,9 @@ export const useStore = create<State>((set, get) => ({
       app: 'workbench',
       version: 1,
       exportedAt: now(),
-      notes: s.notes,
       commands: s.commands,
       runbooks: s.runbooks,
       runs: s.runs,
-      tasks: s.tasks,
       envs: s.envs,
       settings: withoutToken(s.settings),
       connections: s.connections,
@@ -277,11 +235,9 @@ export const useStore = create<State>((set, get) => ({
       if (mode === 'replace') {
         await Promise.all(ALL_TABLES.filter((t) => t !== db.kv).map((t) => t.clear()))
       }
-      await db.notes.bulkPut(b.notes ?? [])
       await db.commands.bulkPut(b.commands ?? [])
       await db.runbooks.bulkPut(b.runbooks ?? [])
       await db.runs.bulkPut(b.runs ?? [])
-      await db.tasks.bulkPut(b.tasks ?? [])
       await db.envs.bulkPut(b.envs ?? [])
       await db.connections.bulkPut(b.connections ?? [])
       await db.cards.bulkPut(b.cards ?? [])

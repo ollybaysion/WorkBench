@@ -5,12 +5,6 @@ export interface Base {
   tags: string[]
 }
 
-export interface Note extends Base {
-  title: string
-  folder: string
-  content: string
-}
-
 export type Risk = 'read' | 'change' | 'destroy'
 
 export interface CommandVar {
@@ -70,19 +64,6 @@ export interface RunbookRun {
   doneSteps: string[]
   checklist: Record<string, boolean[]>
   status: RunStatus
-}
-
-export type TaskStatus = 'todo' | 'doing' | 'done'
-export type Repeat = 'none' | 'daily' | 'weekly' | 'monthly'
-
-export interface Task extends Base {
-  title: string
-  status: TaskStatus
-  due?: string
-  repeat: Repeat
-  noteId?: string
-  runbookId?: string
-  doneAt?: string
 }
 
 export interface EnvPreset {
@@ -165,15 +146,16 @@ export interface ExportBundle {
   app: 'workbench'
   version: 1
   exportedAt: string
-  notes: Note[]
   commands: Command[]
   runbooks: Runbook[]
   runs: RunbookRun[]
-  tasks: Task[]
   envs: EnvPreset[]
   settings: Settings
   // 예전 백업 파일에는 아래 셋이 없다
   connections?: Connection[]
   cards?: Card[]
   boards?: Board[]
+  // 예전 백업 파일에만 있다(지식 베이스 노트 · 업무 보드). 가져오기는 이 둘을 읽지 않는다
+  notes?: unknown[]
+  tasks?: unknown[]
 }

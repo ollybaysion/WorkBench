@@ -45,15 +45,6 @@ export function todayStr(): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
-export function addPeriod(dateStr: string, repeat: 'daily' | 'weekly' | 'monthly'): string {
-  const d = new Date(dateStr + 'T00:00:00')
-  if (repeat === 'daily') d.setDate(d.getDate() + 1)
-  if (repeat === 'weekly') d.setDate(d.getDate() + 7)
-  if (repeat === 'monthly') d.setMonth(d.getMonth() + 1)
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
-}
-
 export async function copyText(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text)

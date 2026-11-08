@@ -5,9 +5,8 @@ import type { Runbook, RunbookInput, RunbookRun, RunStatus, Step, StepTool } fro
 import { render } from '../lib/template'
 import { copyText, fmtDate, now, parseLines, parseTags, relTime, uid } from '../lib/util'
 import Topbar from '../components/Topbar'
+import { RUN_STATUS_LABEL, RUN_STATUS_PILL } from '../components/vars'
 
-const STATUS_LABEL: Record<RunStatus, string> = { in_progress: '진행 중', done: '완료', aborted: '중단' }
-const STATUS_PILL: Record<RunStatus, string> = { in_progress: 'blue', done: 'green', aborted: 'gray' }
 const TOOL_LABEL: Record<StepTool['type'], string> = { command: '⌘ 명령', template: '📝 템플릿', checklist: '☑ 체크리스트', timer: '⏱ 타이머', link: '🔗 링크' }
 
 export default function Runbooks() {
@@ -241,7 +240,7 @@ function RunbookDetail({ rb, run, onEdit }: { rb: Runbook; run?: RunbookRun; onE
             const d = h.doneSteps.filter((sid) => rb.steps.some((s) => s.id === sid)).length
             return (
               <li key={h.id}>
-                <span className={`pill ${STATUS_PILL[h.status]}`}>{STATUS_LABEL[h.status]}</span>
+                <span className={`pill ${RUN_STATUS_PILL[h.status]}`}>{RUN_STATUS_LABEL[h.status]}</span>
                 <span className="t">
                   {h.by || '익명'} · {fmtDate(h.startedAt)}
                   {h.finishedAt && ` → ${fmtDate(h.finishedAt)}`}
