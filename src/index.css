@@ -497,6 +497,40 @@ pre.code { background: var(--code-bg); color: var(--code-text); padding: 12px 14
 .stat-d { font-size: 11px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stat-d em { font-style: normal; color: var(--muted); }
 .stat-spark { display: block; margin-top: 2px; }
+.stat.tight { padding: 3px 7px; gap: 1px; }
+.stat.tight .stat-l { font-size: 10.5px; }
+.stat.pickable { cursor: pointer; }
+.stat.sel { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.stat.over { border-color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger); background: color-mix(in srgb, var(--danger-soft) 55%, var(--surface-2)); }
+.stat-x { display: inline-flex; align-items: center; gap: 3px; color: var(--danger); font-weight: 700; margin-right: 5px; }
+.stat-v.txt { letter-spacing: .02em; font-weight: 700; }
+.stat.over .stat-v { color: var(--danger); }
+/* 범위 막대: 가운데 80 % 가 LCL~UCL */
+.stat-rg { display: flex; flex-direction: column; gap: 1px; margin-top: 2px; }
+.stat-trk { position: relative; display: block; height: 6px; border-radius: 3px; background: var(--border); }
+.stat-in { position: absolute; left: 10%; right: 10%; top: 0; bottom: 0; border-radius: 3px; background: color-mix(in srgb, var(--accent) 28%, var(--surface)); }
+.stat-trk b { position: absolute; top: 50%; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 50%; background: var(--text); border: 2px solid var(--surface); }
+.stat.over .stat-trk b { background: var(--danger); }
+.stat-rgt { font: 10.5px "JetBrains Mono", Consolas, monospace; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 고름 · 넘음 · 눌러서 변수 넣기 */
+.rtable td.pickable { cursor: pointer; }
+.rtable tbody tr.sel td { background: var(--accent-soft); }
+.rtable tbody tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.rtable tbody tr.over td { background: color-mix(in srgb, var(--danger-soft) 70%, var(--surface)); }
+.rtable tbody tr.sel.over td { background: color-mix(in srgb, var(--danger-soft) 55%, var(--accent-soft)); }
+.rtable td.overv { color: var(--danger); font-weight: 700; }
+.rtable tbody tr:hover td.pickable { background: color-mix(in srgb, var(--accent-soft) 60%, transparent); }
+.ch-pick { cursor: pointer; }
+.ch-pick:hover { stroke: var(--text); stroke-width: 1; }
+.ch-sel { fill: none; stroke: var(--text); stroke-width: 2; pointer-events: none; }
+.ch-tip .ch-tip-hint { color: var(--muted); font-size: 11px; }
+.ch-legend i.muted-line { background: var(--muted); opacity: .45; height: 2px; }
+.ch-legend i.dash-line { height: 0; border-top: 2px dashed var(--danger); border-radius: 0; background: none; }
+.ch-legend .ch-peak { color: var(--danger); font-weight: 700; }
+.vpill.set { border-color: var(--accent); background: var(--accent-soft); }
+.vpill.set .k { color: var(--accent); }
+.qc-pick { color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cf-wide { grid-column: 1 / -1; }
 .qc-status.idle { color: var(--muted); font-style: italic; }
 .qc-state.idle { flex-direction: column; gap: 6px; }
 .qc-run { color: var(--accent); }

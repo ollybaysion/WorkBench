@@ -20,16 +20,28 @@ interface Props {
   onChecks: (cardId: string, checks: boolean[]) => void
   selectedId?: string
   onOpen: (cardId: string) => void
+  /** 카드에서 행 · 칸 · 타일을 눌러 변수 띠에 값을 넣는다 */
+  onPick: (patch: Record<string, string>) => void
 }
 
 /** CSS grid 4 열 · 칸 높이 184 · 간격 12. 칸은 x,y,w,h 로 놓인다 */
-export default function BoardGrid({ cells, connOf, runs, stale, onRun, boardVars, checks, onChecks, selectedId, onOpen }: Props) {
+export default function BoardGrid({ cells, connOf, runs, stale, onRun, boardVars, checks, onChecks, selectedId, onOpen, onPick }: Props) {
   return (
     <div className="bgrid">
       {cells.map(({ cell, card }) => (
         <div key={card.id} className="bcell" style={{ gridColumn: `${cell.x + 1} / span ${cell.w}`, gridRow: `${cell.y + 1} / span ${cell.h}` }}>
           {card.kind === 'query' ? (
-            <QueryCardView card={card} conn={connOf(card)} run={runs[card.id]} stale={!!stale[card.id]} onRun={() => onRun(card)} selected={card.id === selectedId} onOpen={() => onOpen(card.id)} />
+            <QueryCardView
+              card={card}
+              conn={connOf(card)}
+              run={runs[card.id]}
+              stale={!!stale[card.id]}
+              onRun={() => onRun(card)}
+              selected={card.id === selectedId}
+              vars={boardVars}
+              onOpen={() => onOpen(card.id)}
+              onPick={onPick}
+            />
           ) : (
             <CommandCardView
               card={card}

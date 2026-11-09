@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { db } from './db'
 import type { Command, Runbook, RunbookRun, EnvPreset, Settings, ExportBundle, Connection, Card, Board } from './types'
 import { seedCommands, seedEnvs, seedRunbooks } from './lib/seed'
-import { seedBoardCommands, seedBoards, seedCards, seedConnections } from './lib/seedBoard'
+import { seedBoardCommands, seedBoards, seedCards, seedConnections, seedFdcBoard, seedFdcCards, seedFdcConnections } from './lib/seedBoard'
 import { now } from './lib/util'
 import { migrateBoards, migrateCards } from './lib/conn'
 
@@ -94,6 +94,20 @@ export const useStore = create<State>((set, get) => ({
         await db.boards.bulkPut(seedBoards)
         const have = await db.commands.bulkGet(seedBoardCommands.map((c) => c.id))
         await db.commands.bulkPut(seedBoardCommands.filter((_, i) => !have[i]))
+      })
+    }
+    // FDC 확인 작업판: 한 번만 넣는다(지운 뒤 다시 생기지 않게 kv 에 적는다). 같은 id 가 이미 있으면 그대로 둔다
+    if (!(await db.kv.get('seededFdcTrace'))) {
+      await db.transaction('rw', [db.connections, db.cards, db.boards, db.kv], async () => {
+        const [conns, cards, board] = await Promise.all([
+          db.connections.bulkGet(seedFdcConnections.map((c) => c.id)),
+          db.cards.bulkGet(seedFdcCards.map((c) => c.id)),
+          db.boards.get(seedFdcBoard.id),
+        ])
+        await db.connections.bulkPut(seedFdcConnections.filter((_, i) => !conns[i]))
+        await db.cards.bulkPut(seedFdcCards.filter((_, i) => !cards[i]))
+        if (!board) await db.boards.put(seedFdcBoard)
+        await db.kv.put({ key: 'seededFdcTrace', value: true })
       })
     }
     const [commands, runbooks, runs, envs, connections, loadedCards, loadedBoards, s] = await Promise.all([

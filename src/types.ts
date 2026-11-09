@@ -100,7 +100,31 @@ export interface Connection extends Base {
 } // 비밀번호는 agent-db 가 passwordEnv 로 읽는다. 브라우저 저장소에는 없다.
 
 export type ChartType = 'line' | 'step' | 'area' | 'bar' | 'stacked-bar' | 'scatter' | 'histogram' | 'heatmap' | 'box' | 'stat'
-export type CardView = { kind: 'table' } | { kind: 'chart'; type: ChartType; x: string; y: string[]; series?: string }
+export type CardView =
+  | { kind: 'table' }
+  | {
+      kind: 'chart'
+      type: ChartType
+      x: string
+      y: string[]
+      series?: string
+      /** 겹침 모드: 이 변수 값과 이름이 같은 시리즈만 진하게, 나머지는 회색으로 깐다(선 그래프) */
+      focus?: string
+      /** 구간 열(STEP 같은). 값이 바뀌는 x 에 세로 선과 구간 이름을 그린다(선 그래프) */
+      phase?: string
+    }
+
+/** 눌러서 변수 넣기: 결과 열 col 의 값을 변수 var 에 넣는다 */
+export interface PickRule {
+  col: string
+  var: string
+}
+/** 관리 한계 열 이름. 행마다 읽는다. value 는 표가 한계와 견줄 열(그래프 · 숫자 타일은 y 값과 견준다) */
+export interface Limits {
+  lcl?: string
+  ucl?: string
+  value?: string
+}
 
 interface CardBase extends Base {
   title: string
@@ -112,6 +136,10 @@ export interface QueryCard extends CardBase {
   sql: string // 바인드는 `:이름`. 변수 목록은 SQL 에서 자동 추출한다(저장하지 않는다)
   keyColumns: string[] // 비교 때 행을 맞출 열. 지금은 저장만
   view: CardView
+  /** 표 · 히트맵 칸 · 숫자 타일을 누르면 그 행의 값이 변수 띠에 들어간다. 없으면 누를 때 값을 복사한다 */
+  picks?: PickRule[]
+  /** 범위를 넘은 행 · 칸 · 타일을 표시하고, 선 그래프에 LCL · UCL 선을 그린다 */
+  limits?: Limits
 }
 export interface CommandCard extends CardBase {
   kind: 'command'

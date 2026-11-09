@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Connection, QueryCard } from '../../types'
 import type { QueryState } from '../../lib/runner'
 import { fmtSec } from '../../lib/util'
@@ -8,6 +8,7 @@ import ResultTable, { ROW_H_COMPACT } from './ResultTable'
 import Chart from '../chart/Chart'
 import RecordList from './RecordList'
 import type { CardView } from '../../types'
+import { pickHint, type Marks } from '../../lib/marks'
 
 /** 연결 태그 `FDC-L1 · production`. 좁은 카드에서는 환경 이름을 숨긴다(index.css 컨테이너 쿼리) */
 export function ConnTag({ conn, name }: { conn?: Connection; name: string }) {
@@ -60,7 +61,7 @@ export function ModeSeg({ mode, chart, onMode, chartType }: { mode: ResultMode; 
 }
 
 /** 상태 셋: 조회 중 · 0 행 · 오류. 그 외에는 표, 그래프 보기면 그래프, 행 카드 보기면 행 카드 */
-export function QueryBody({ run, compact, maxRows, view, records, onRun }: { run?: QueryState; compact?: boolean; maxRows?: number; view?: CardView; records?: boolean; onRun?: () => void }) {
+export function QueryBody({ run, compact, maxRows, view, records, onRun, marks }: { run?: QueryState; compact?: boolean; maxRows?: number; view?: CardView; records?: boolean; onRun?: () => void; marks?: Marks }) {
   if (!run)
     return (
       <div className="qc-state idle">
@@ -88,18 +89,19 @@ export function QueryBody({ run, compact, maxRows, view, records, onRun }: { run
       </div>
     )
   if (run.result.rows.length === 0) return <div className="qc-state">결과 없음</div>
-  if (view?.kind === 'chart') return <Chart result={run.result} spec={view} />
+  if (view?.kind === 'chart') return <Chart result={run.result} spec={view} marks={marks} />
   if (records) return <RecordList result={run.result} step={compact ? 20 : 100} />
-  return <ResultTable result={run.result} compact={compact} maxRows={maxRows} />
+  return <ResultTable result={run.result} compact={compact} maxRows={maxRows} marks={marks} />
 }
 
-export function QueryFoot({ run }: { run?: QueryState }) {
+export function QueryFoot({ run, hint }: { run?: QueryState; hint?: string }) {
   if (!run) return <span>조회 전 · ▶ 를 누르면 조회합니다</span>
   if (run.status === 'loading') return <span>조회 중…</span>
   if (run.status === 'error') return <span className="err">오류</span>
   return (
     <>
       <span>{run.result.rows.length} 행</span>
+      {hint && <span className="qc-pick">{hint}</span>}
       {run.result.truncated && (
         <span className="trunc" title={run.result.note}>
           ⚠ {run.result.rows.length} 행에서 잘림
@@ -111,7 +113,27 @@ export function QueryFoot({ run }: { run?: QueryState }) {
   )
 }
 
-export default function QueryCardView({ card, conn, run, stale, selected, onOpen, onRun }: { card: QueryCard; conn?: Connection; run?: QueryState; stale: boolean; selected: boolean; onOpen: () => void; onRun: () => void }) {
+export default function QueryCardView({
+  card,
+  conn,
+  run,
+  stale,
+  selected,
+  vars,
+  onOpen,
+  onRun,
+  onPick,
+}: {
+  card: QueryCard
+  conn?: Connection
+  run?: QueryState
+  stale: boolean
+  selected: boolean
+  vars: Record<string, string>
+  onOpen: () => void
+  onRun: () => void
+  onPick: (patch: Record<string, string>) => void
+}) {
   const bodyRef = useRef<HTMLDivElement>(null)
   // 표는 들어가는 만큼만: 몸통 높이에서 머리 행을 빼고 행 높이로 나눈다
   const [maxRows, setMaxRows] = useState<number>()
@@ -126,6 +148,7 @@ export default function QueryCardView({ card, conn, run, stale, selected, onOpen
   const chart = card.view.kind === 'chart'
   const [mode, setMode] = useState<ResultMode>(chart ? 'chart' : 'table')
   const cls = 'qcard' + (selected ? ' sel' : '') + (run?.status === 'error' ? ' err' : '')
+  const marks = useMemo<Marks>(() => ({ vars, picks: card.picks, limits: card.limits, onPick }), [vars, card.picks, card.limits, onPick])
   return (
     <article className={cls} onClick={onOpen}>
       <div className="qc-head">
@@ -162,7 +185,7 @@ export default function QueryCardView({ card, conn, run, stale, selected, onOpen
         </button>
       </div>
       <div className={'qc-body' + (mode === 'records' ? ' records' : '')} ref={bodyRef}>
-        <QueryBody run={run} compact maxRows={maxRows} view={mode === 'chart' ? card.view : undefined} records={mode === 'records'} onRun={onRun} />
+        <QueryBody run={run} compact maxRows={maxRows} view={mode === 'chart' ? card.view : undefined} records={mode === 'records'} onRun={onRun} marks={marks} />
       </div>
       <div className="qc-foot">
         {stale ? (
@@ -178,7 +201,7 @@ export default function QueryCardView({ card, conn, run, stale, selected, onOpen
             ⟳ 변수가 바뀜 · 다시 조회
           </button>
         ) : (
-          <QueryFoot run={run} />
+          <QueryFoot run={run} hint={mode === 'records' ? undefined : pickHint(card)} />
         )}
       </div>
     </article>

@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { Card, CommandCard, Connection, QueryCard } from '../../types'
 import type { QueryState } from '../../lib/runner'
+import type { Marks } from '../../lib/marks'
 import { bindSpans, extractBinds, fillBinds } from '../../lib/sql'
 import { render } from '../../lib/template'
 import { fmtSec, fmtTime } from '../../lib/util'
@@ -86,6 +87,8 @@ function QueryDrawer({ card, run, boardVars, connName, onRerun }: { card: QueryC
   const ok = run?.status === 'ok' ? run.result : undefined
   // 열이 많으면 행 카드로 먼저 연다
   const [mode, setMode] = useState<ResultMode>(() => (ok && ok.columns.length > 12 ? 'records' : 'table'))
+  // 서랍에서는 누르면 복사한다. 고른 행 · 넘은 행 표시는 카드와 같다
+  const marks = useMemo<Marks>(() => ({ vars: boardVars, picks: card.picks, limits: card.limits }), [boardVars, card.picks, card.limits])
   let foot: ReactNode
   if (!run) foot = <span>조회 전</span>
   else if (run.status === 'loading') foot = <span>조회 중…</span>
@@ -122,7 +125,7 @@ function QueryDrawer({ card, run, boardVars, connName, onRerun }: { card: QueryC
         </div>
         {card.view.kind === 'chart' && ok && ok.rows.length > 0 && (
           <div className="drawer-chart">
-            <Chart result={ok} spec={card.view} />
+            <Chart result={ok} spec={card.view} marks={marks} />
           </div>
         )}
         <div className="btn-row drawer-tbar">
@@ -136,7 +139,7 @@ function QueryDrawer({ card, run, boardVars, connName, onRerun }: { card: QueryC
           )}
         </div>
         <div className={'tbox drawer-table' + (mode === 'records' ? ' records' : '')}>
-          <QueryBody run={run} records={mode === 'records'} onRun={onRerun} />
+          <QueryBody run={run} records={mode === 'records'} onRun={onRerun} marks={marks} />
         </div>
         <details className="sqlbox" open>
           <summary>

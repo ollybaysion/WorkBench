@@ -77,6 +77,9 @@ function BoardView({ board }: { board: Board }) {
   const connections = useStore((s) => s.connections)
   const envs = useStore((s) => s.envs)
   const upsertBoard = useStore((s) => s.upsertBoard)
+  const showToast = useStore((s) => s.showToast)
+  // 카드에서 눌러 넣은 변수 이름(이 화면에서만). 변수 띠에서 파랗게 보인다
+  const [picked, setPicked] = useState<string[]>([])
 
   // 조회는 사람이 ▶ 를 눌러야 돈다. 결과는 세션(모듈)에 두고 IndexedDB 에는 저장하지 않는다
   const boardId = board.id
@@ -165,6 +168,20 @@ function BoardView({ board }: { board: Board }) {
     },
     [board.id, upsertBoard],
   )
+  /** 카드의 행 · 칸 · 타일을 눌렀다: 그 행의 값을 변수 띠에 넣는다. 다시 조회는 사람이 누른다(⟳ 바뀐 카드) */
+  const pickVars = useCallback(
+    (patch: Record<string, string>) => {
+      const b = useStore.getState().boards.find((x) => x.id === board.id)
+      if (!b) return
+      const changed = Object.keys(patch).filter((k) => (b.vars[k] ?? '') !== patch[k])
+      setPicked((p) => [...new Set([...p, ...Object.keys(patch)])])
+      if (changed.length === 0) return
+      void upsertBoard({ ...b, vars: { ...b.vars, ...patch } })
+      showToast(`변수 ${changed.map((k) => `${k} = ${patch[k] || '(빈 값)'}`).join(' · ')}`)
+    },
+    [board.id, upsertBoard, showToast],
+  )
+  const touchVar = useCallback((name: string) => setPicked((p) => (p.includes(name) ? p.filter((x) => x !== name) : p)), [])
   const setCardChecks = (cardId: string, c: boolean[]) => setChecks((all) => ({ ...all, [cardId]: c }))
 
   const title =
@@ -198,9 +215,9 @@ function BoardView({ board }: { board: Board }) {
           </Link>
         </Topbar>
         <ConnBand names={connNamesUsed} connOf={(name) => resolveConn(name, { conns: board.conns }, connections, envs)} onPick={pickConn} />
-        <VarBand names={bindNames} vars={board.vars} onSave={saveVars} />
+        <VarBand names={bindNames} vars={board.vars} onSave={saveVars} picked={picked} onTouch={touchVar} />
       </div>
-      <BoardGrid cells={cells} connOf={connOf} runs={runs} stale={stale} onRun={runCard} boardVars={board.vars} checks={checks} onChecks={setCardChecks} selectedId={selectedId} onOpen={open} />
+      <BoardGrid cells={cells} connOf={connOf} runs={runs} stale={stale} onRun={runCard} boardVars={board.vars} checks={checks} onChecks={setCardChecks} selectedId={selectedId} onOpen={open} onPick={pickVars} />
       {selected && (
         <CardDrawer
           card={selected}

@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { fmtNum, fmtVal, niceTicks, type BoxGroup, type HeatCell, type XY } from '../../lib/chartData'
 import { seriesVar } from './theme'
+import type { RowHooks } from './Chart'
 
 const M = { l: 52, r: 10, t: 8, b: 22 }
 
@@ -164,7 +165,7 @@ export function BarChart({ data, stacked, width, height }: { data: XY; stacked: 
 }
 
 /** 히트맵: 한 색(파랑)의 진하기로 값을 보인다. y 첫 값이 아래 */
-export function HeatmapChart({ xs, ys, cells, min, max, xName, yName, vName, width, height }: { xs: string[]; ys: string[]; cells: HeatCell[]; min: number; max: number; xName: string; yName: string; vName: string; width: number; height: number }) {
+export function HeatmapChart({ xs, ys, cells, min, max, xName, yName, vName, rows, width, height }: { xs: string[]; ys: string[]; cells: HeatCell[]; min: number; max: number; xName: string; yName: string; vName: string; rows?: RowHooks; width: number; height: number }) {
   const [tip, setTip] = useState<TipState | null>(null)
   const h = height - 18
   const iw = width - M.l - M.r
@@ -177,6 +178,10 @@ export function HeatmapChart({ xs, ys, cells, min, max, xName, yName, vName, wid
   const gap = cell > 6 ? 1 : 0
   const t = (v: number) => (max > min ? (v - min) / (max - min) : 1)
   const yStep = labelStep(ys.length, cell * ys.length * 2.2)
+  const cx = (c: HeatCell) => ox + c.xi * cw
+  const cy = (c: HeatCell) => oy + (ys.length - 1 - c.yi) * chh
+  const sel = rows ? cells.filter((c) => rows.isSel(c.row)) : []
+  const pick = rows?.pick
   const legend = (
     <div className="ch-legend">
       <span>
@@ -191,12 +196,21 @@ export function HeatmapChart({ xs, ys, cells, min, max, xName, yName, vName, wid
       {cells.map((c) => (
         <rect
           key={`${c.xi}-${c.yi}`}
-          x={ox + c.xi * cw + gap / 2}
-          y={oy + (ys.length - 1 - c.yi) * chh + gap / 2}
+          x={cx(c) + gap / 2}
+          y={cy(c) + gap / 2}
           width={Math.max(0.5, cw - gap)}
           height={Math.max(0.5, chh - gap)}
           fill={seriesVar(0)}
           fillOpacity={0.12 + 0.88 * t(c.v)}
+          className={pick ? 'ch-pick' : undefined}
+          onClick={
+            pick
+              ? (e) => {
+                  e.stopPropagation()
+                  pick(c.row)
+                }
+              : undefined
+          }
           onMouseEnter={() =>
             setTip({
               x: ox + (c.xi + 0.5) * cw,
@@ -209,12 +223,16 @@ export function HeatmapChart({ xs, ys, cells, min, max, xName, yName, vName, wid
                   <span>
                     {vName} <em>{fmtVal(c.v)}</em>
                   </span>
+                  {pick && <span className="ch-tip-hint">눌러서 {rows!.hint(c.row)} 넣기</span>}
                 </>
               ),
             })
           }
           onMouseLeave={() => setTip(null)}
         />
+      ))}
+      {sel.map((c) => (
+        <rect key={`sel-${c.xi}-${c.yi}`} x={cx(c) + 1} y={cy(c) + 1} width={Math.max(0.5, cw - 2)} height={Math.max(0.5, chh - 2)} rx={2} className="ch-sel" />
       ))}
       <g className="ch-axis">
         {ys.map((l, i) =>

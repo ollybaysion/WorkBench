@@ -5,11 +5,21 @@ interface Props {
   vars: Record<string, string>
   /** 300 ms 디바운스 뒤 호출 */
   onSave: (vars: Record<string, string>) => void
+  /** 카드에서 눌러 넣은 변수(파랗게 보인다). 손으로 고치면 onTouch 로 알린다 */
+  picked?: string[]
+  onTouch?: (name: string) => void
 }
 
 /** 변수 띠 — 보드의 조회 카드 SQL 바인드를 알약 입력으로 보인다. 값은 board.vars 에 저장 */
-export default function VarBand({ names, vars, onSave }: Props) {
+export default function VarBand({ names, vars, onSave, picked = [], onTouch }: Props) {
   const [draft, setDraft] = useState(vars)
+  // 밖(카드에서 눌러 넣기)에서 vars 가 바뀌면 바뀐 값만 입력칸에 옮긴다. 아직 저장하지 않은 손 입력은 남긴다
+  const [prev, setPrev] = useState(vars)
+  if (vars !== prev) {
+    const changed = Object.keys(vars).filter((k) => vars[k] !== prev[k])
+    setPrev(vars)
+    if (changed.length) setDraft((d) => ({ ...d, ...Object.fromEntries(changed.map((k) => [k, vars[k]])) }))
+  }
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const pending = useRef<Record<string, string> | null>(null)
   const saveRef = useRef(onSave)
@@ -29,7 +39,8 @@ export default function VarBand({ names, vars, onSave }: Props) {
   useEffect(() => flush, [])
 
   const change = (name: string, value: string) => {
-    const next = { ...draft, [name]: value }
+    onTouch?.(name)
+    const next = { ...vars, ...draft, [name]: value }
     setDraft(next)
     pending.current = next
     if (timer.current) clearTimeout(timer.current)
@@ -42,7 +53,7 @@ export default function VarBand({ names, vars, onSave }: Props) {
       {names.map((n) => {
         const v = draft[n] ?? ''
         return (
-          <label key={n} className={'vpill' + (v ? '' : ' empty')}>
+          <label key={n} className={'vpill' + (v ? '' : ' empty') + (v && picked.includes(n) ? ' set' : '')} title={picked.includes(n) ? '카드에서 눌러 넣은 값' : undefined}>
             <span className="k">{n}</span>
             <input value={v} placeholder="비어 있음" style={{ width: `calc(${Math.max(7, v.length + 1)}ch + 12px)` }} onChange={(e) => change(n, e.target.value)} />
           </label>

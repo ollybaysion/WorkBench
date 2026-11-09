@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { Board, Card, CardView, ChartType } from '../../types'
+import type { Board, Card, CardView, ChartType, Limits } from '../../types'
+import { formatPicks, parsePicks, type Marks } from '../../lib/marks'
 import { runner, type QueryState } from '../../lib/runner'
 import { extractBinds, pickBinds } from '../../lib/sql'
 import { render } from '../../lib/template'
@@ -36,8 +37,16 @@ interface Draft {
   x: string
   y: string // 쉼표로 나눈 열 이름
   series: string
+  focus: string // 겹침 변수
+  phase: string // 구간 열
+  picks: string // "lot_id, slot:wafer"
+  lcl: string
+  ucl: string
+  limValue: string // 표가 한계와 견줄 열
   commandId: string
 }
+
+const LINE_TYPES: ChartType[] = ['line', 'step', 'area', 'scatter']
 
 function toDraft(c: Card): Draft {
   const q = c.kind === 'query' ? c : undefined
@@ -53,6 +62,12 @@ function toDraft(c: Card): Draft {
     x: chart?.x ?? '',
     y: chart?.y.join(', ') ?? '',
     series: chart?.series ?? '',
+    focus: chart?.focus ?? '',
+    phase: chart?.phase ?? '',
+    picks: formatPicks(q?.picks),
+    lcl: q?.limits?.lcl ?? '',
+    ucl: q?.limits?.ucl ?? '',
+    limValue: q?.limits?.value ?? '',
     commandId: c.kind === 'command' ? c.commandId : '',
   }
 }
@@ -62,6 +77,24 @@ const splitCols = (s: string) =>
     .split(',')
     .map((x) => x.trim())
     .filter(Boolean)
+
+/** 그래프 설정. 겹침 · 구간은 선 계열 그래프에만 싣는다 */
+function viewOf(d: Draft): CardView {
+  if (d.view === 'table') return { kind: 'table' }
+  const series = d.series.trim()
+  const line = LINE_TYPES.includes(d.chartType)
+  const focus = line ? d.focus.trim() : ''
+  const phase = line ? d.phase.trim() : ''
+  return { kind: 'chart', type: d.chartType, x: d.x.trim(), y: splitCols(d.y), ...(series ? { series } : {}), ...(focus ? { focus } : {}), ...(phase ? { phase } : {}) }
+}
+
+function limitsOf(d: Draft): Limits | undefined {
+  const lcl = d.lcl.trim()
+  const ucl = d.ucl.trim()
+  const value = d.limValue.trim()
+  if (!lcl && !ucl) return undefined
+  return { ...(lcl ? { lcl } : {}), ...(ucl ? { ucl } : {}), ...(value ? { value } : {}) }
+}
 
 function fromDraft(d: Draft, base: Card): Card {
   const description = d.description.trim()
@@ -74,10 +107,18 @@ function fromDraft(d: Draft, base: Card): Card {
     ...(description ? { description } : {}),
   }
   if (d.kind === 'command') return { ...common, kind: 'command', commandId: d.commandId }
-  const series = d.series.trim()
-  const view: CardView =
-    d.view === 'table' ? { kind: 'table' } : { kind: 'chart', type: d.chartType, x: d.x.trim(), y: splitCols(d.y), ...(series ? { series } : {}) }
-  return { ...common, kind: 'query', connection: d.connection, sql: d.sql, keyColumns: base.kind === 'query' ? base.keyColumns : [], view }
+  const picks = parsePicks(d.picks)
+  const limits = limitsOf(d)
+  return {
+    ...common,
+    kind: 'query',
+    connection: d.connection,
+    sql: d.sql,
+    keyColumns: base.kind === 'query' ? base.keyColumns : [],
+    view: viewOf(d),
+    ...(picks.length ? { picks } : {}),
+    ...(limits ? { limits } : {}),
+  }
 }
 
 /** 저장을 막는 첫 문제. 없으면 undefined */
@@ -87,6 +128,7 @@ function problemOf(d: Draft, names: string[], cmdIds: string[]): string | undefi
   if (!names.includes(d.connection)) return '연결을 고르세요'
   if (!d.sql.trim()) return 'SQL 을 넣으세요'
   if (d.view === 'chart' && (!d.x.trim() || splitCols(d.y).length === 0)) return '그래프의 x 열과 y 열을 넣으세요'
+  if (d.view === 'table' && (d.lcl.trim() || d.ucl.trim()) && !d.limValue.trim()) return '표는 한계와 견줄 값 열을 넣으세요'
   return undefined
 }
 
@@ -141,10 +183,9 @@ export default function CardForm({ card, isNew, size, boardVars, boardConns, onS
     commands.map((c) => c.id),
   )
   const binds = d.kind === 'query' ? extractBinds(d.sql) : []
-  // 미리보기 그래프는 지금 고친 그래프 열로 바로 다시 그린다
-  const series = d.series.trim()
-  const previewView: CardView | undefined =
-    d.view === 'chart' ? { kind: 'chart', type: d.chartType, x: d.x.trim(), y: splitCols(d.y), ...(series ? { series } : {}) } : undefined
+  // 미리보기 그래프는 지금 고친 그래프 열 · 고르기 · 한계로 바로 다시 그린다
+  const previewView: CardView | undefined = d.view === 'chart' ? viewOf(d) : undefined
+  const previewMarks: Marks = { vars: boardVars, picks: parsePicks(d.picks), limits: limitsOf(d) }
   const cmd = d.kind === 'command' ? commands.find((c) => c.id === d.commandId) : undefined
   const previewConn = d.kind === 'query' ? resolveConn(d.connection, { conns: boardConns }, connections, envs) : undefined
 
@@ -281,8 +322,46 @@ export default function CardForm({ card, isNew, size, boardVars, boardConns, onS
                 시리즈 열 (선택)
                 <input className="mono" value={d.series} onChange={(e) => set({ series: e.target.value })} placeholder="snsr_id" spellCheck={false} />
               </label>
+              {LINE_TYPES.includes(d.chartType) && (
+                <>
+                  <label className="field">
+                    겹침 변수 (선택)
+                    <input className="mono" value={d.focus} onChange={(e) => set({ focus: e.target.value })} placeholder="wafer" spellCheck={false} />
+                    <span className="small muted">이 변수 값과 이름이 같은 시리즈만 진하게, 나머지는 회색으로 깝니다.</span>
+                  </label>
+                  <label className="field">
+                    구간 열 (선택)
+                    <input className="mono" value={d.phase} onChange={(e) => set({ phase: e.target.value })} placeholder="step" spellCheck={false} />
+                    <span className="small muted">값이 바뀌는 자리에 세로 선과 구간 이름을 그립니다.</span>
+                  </label>
+                </>
+              )}
             </div>
           )}
+          <div className="cf-chart">
+            <label className="field">
+              LCL 열 (선택)
+              <input className="mono" value={d.lcl} onChange={(e) => set({ lcl: e.target.value })} placeholder="lcl" spellCheck={false} />
+            </label>
+            <label className="field">
+              UCL 열 (선택)
+              <input className="mono" value={d.ucl} onChange={(e) => set({ ucl: e.target.value })} placeholder="ucl" spellCheck={false} />
+            </label>
+            <label className="field">
+              한계와 견줄 열 {d.view === 'table' ? '' : '(선택)'}
+              <input className="mono" value={d.limValue} onChange={(e) => set({ limValue: e.target.value })} placeholder={d.view === 'table' ? 'mx' : 'y 값'} spellCheck={false} />
+            </label>
+            <span className="small muted cf-wide">
+              한계는 행마다 읽습니다. 넘은 행 · 타일은 빨간 띠와 ▲ UCL 넘음 · ▼ LCL 아래로, 선 그래프는 점선과 칠한 구간으로 보입니다. 그래프 · 숫자 타일은 비우면 y 값과 견줍니다.
+            </span>
+          </div>
+          <label className="field">
+            누르면 넣을 변수 (선택)
+            <input className="mono" value={d.picks} onChange={(e) => set({ picks: e.target.value })} placeholder="lot_id, slot:wafer" spellCheck={false} />
+            <span className="small muted">
+              표의 행 · 히트맵 칸 · 숫자 타일을 누르면 그 행의 열 값이 변수 띠에 들어갑니다. "열:변수" 로 적고, 이름이 같으면 열 이름만 적습니다. 비우면 누를 때 값을 복사합니다.
+            </span>
+          </label>
         </>
       ) : (
         <>
@@ -356,7 +435,7 @@ export default function CardForm({ card, isNew, size, boardVars, boardConns, onS
           {preview && (
             <>
               <div className={'cf-preview' + (d.view === 'chart' ? ' chart' : '')}>
-                <QueryBody run={preview} compact view={previewView} />
+                <QueryBody run={preview} compact view={previewView} marks={previewMarks} />
               </div>
               <div className="qc-foot">
                 <QueryFoot run={preview} />
