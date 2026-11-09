@@ -1,4 +1,4 @@
-import type { Board, Card, CardView, Command, Connection } from '../types'
+import type { Board, Card, CardView, Command, Connection, Limits, PickRule, QueryCard } from '../types'
 import { now } from './util'
 
 // 작업대 시드 — 시안 mockups/card/gen.py · mockups/kit.py 의 값을 옮겼다.
@@ -26,6 +26,9 @@ export const seedConnections: Connection[] = [
   oracle('conn_fdc_l2_prod', 'FDC-L2', 'env_prod', 'db-l2.fab.internal', 'FDCL2', 'FDC_L2', 'fdc_ops', false),
   oracle('conn_logdb_prod', 'LOGDB', 'env_prod', 'logdb.fab.internal', 'APPLOG', 'APPLOG', 'log_ro', true),
 ]
+
+/** FDC 확인 작업판 연결. alias 를 붙이기 전까지 가짜 결과(lib/fixturesFdc.ts)를 쓴다 */
+export const seedFdcConnections: Connection[] = [oracle('conn_fdc_demo', 'FDC-DEMO', 'env_prod', 'db-l1.fab.internal', 'FDCL1', 'FDC_L1', 'fdc_ro', true)]
 
 /** 명령 카드가 가리키는 Command. 기존 seedCommands 에도 들어가고, 이미 쓰는 브라우저에는 작업대 시드 때 없는 것만 더한다 */
 export const seedBoardCommands: Command[] = [
@@ -155,6 +158,107 @@ export const seedCards: Card[] = [
     ['machine'],
   ),
 ]
+
+// ===== FDC 확인 작업판(mockups/fdc) =====
+// 카드에서 로트 → 웨이퍼 → 파라미터를 눌러 고르면 변수 띠가 바뀌고, ⟳ 바뀐 카드 조회로 파형 · 요약값이 따라온다.
+
+const fdc = (id: string, title: string, sql: string, view: CardView, extra: { picks?: PickRule[]; limits?: Limits } = {}): QueryCard => ({
+  ...base(id, ['fdc']),
+  kind: 'query',
+  title,
+  connection: 'FDC-DEMO',
+  sql,
+  keyColumns: [],
+  view,
+  ...extra,
+})
+const pick = (col: string, v = col): PickRule => ({ col, var: v })
+
+export const seedFdcCards: Card[] = [
+  fdc(
+    'card_fdc_lots',
+    '로트 목록',
+    'select lot_id, count(*) as wafers, to_char(min(start_ts), \'MM-DD HH24:MI\') as started, sum(alarm_cnt) as alarms\nfrom fdc_wafer\nwhere eqp_id = :eqp_id and chamber = :chamber\ngroup by lot_id\norder by min(start_ts) desc',
+    { kind: 'table' },
+    { picks: [pick('lot_id')] },
+  ),
+  fdc(
+    'card_fdc_wmap',
+    '웨이퍼 지도',
+    'select mod(slot - 1, 5) as col, 4 - floor((slot - 1) / 5) as row_no, max(value) as mx, slot\nfrom fdc_trace\nwhere lot_id = :lot_id and param = :param and step = :step\ngroup by slot\norder by slot',
+    { kind: 'chart', type: 'heatmap', x: 'col', y: ['row_no', 'mx'] },
+    { picks: [pick('slot', 'wafer')] },
+  ),
+  fdc(
+    'card_fdc_params',
+    '파라미터 · 한계 가까운 순',
+    'select t.param, max(t.value) as mx, r.lcl, r.ucl\nfrom fdc_trace t\njoin fdc_alarm_rule r on r.param = t.param and r.step = t.step\nwhere t.lot_id = :lot_id and t.slot = :wafer and t.step = :step\ngroup by t.param, r.lcl, r.ucl\norder by (max(t.value) - r.lcl) / (r.ucl - r.lcl) desc',
+    { kind: 'table' },
+    { picks: [pick('param')], limits: { value: 'mx', lcl: 'lcl', ucl: 'ucl' } },
+  ),
+  fdc(
+    'card_fdc_trace',
+    '겹친 파형 · 25 웨이퍼',
+    'select v.ts_sec, v.slot, v.value, \'STEP \' || v.step as step_nm, r.lcl, r.ucl\nfrom fdc_trace_v v\nleft join fdc_alarm_rule r on r.param = v.param and r.step = v.step\nwhere v.lot_id = :lot_id and v.param = :param\norder by v.slot, v.ts_sec',
+    { kind: 'chart', type: 'line', x: 'ts_sec', y: ['value'], series: 'slot', focus: 'wafer', phase: 'step_nm' },
+    { limits: { lcl: 'lcl', ucl: 'ucl' } },
+  ),
+  fdc(
+    'card_fdc_summary',
+    '요약값 · 지금 웨이퍼',
+    "select 'MEAN' as k, round(avg(t.value), 2) as v, r.lcl, r.ucl from fdc_trace t join fdc_alarm_rule r on r.param = t.param and r.step = t.step\n  where t.lot_id = :lot_id and t.slot = :wafer and t.param = :param and t.step = :step group by r.lcl, r.ucl\nunion all\nselect 'MAX', max(t.value), r.lcl, r.ucl from fdc_trace t join fdc_alarm_rule r on r.param = t.param and r.step = t.step\n  where t.lot_id = :lot_id and t.slot = :wafer and t.param = :param and t.step = :step group by r.lcl, r.ucl\nunion all\nselect 'SLOPE', round(regr_slope(t.value, t.ts_sec), 2), -r.slope_lim, r.slope_lim from fdc_trace t join fdc_alarm_rule r on r.param = t.param and r.step = t.step\n  where t.lot_id = :lot_id and t.slot = :wafer and t.param = :param and t.step = :step group by r.slope_lim",
+    { kind: 'chart', type: 'stat', x: 'k', y: ['v'] },
+    { limits: { lcl: 'lcl', ucl: 'ucl' } },
+  ),
+  fdc(
+    'card_fdc_status',
+    '설비 상태',
+    "select a.param || ' · W' || a.slot || ' · ' || a.over_sec || ' s · ' || a.action as what,\n       a.status, a.value, a.ucl, a.over_sec, a.action, to_char(a.ts, 'MM-DD HH24:MI:SS') as ts\nfrom fdc_alarm a\nwhere a.eqp_id = :eqp_id and a.chamber = :chamber\norder by a.ts desc\nfetch first 1 rows only",
+    { kind: 'chart', type: 'stat', x: 'what', y: ['status'] },
+    { limits: { value: 'value', ucl: 'ucl' } },
+  ),
+  fdc(
+    'card_fdc_rules',
+    '알람 범위 · 지금 웨이퍼',
+    'select r.param, r.steps as step, r.lcl, r.ucl, r.duration_s, r.action, max(t.value) as w_max\nfrom fdc_alarm_rule r\nleft join fdc_trace t on t.param = r.param and t.lot_id = :lot_id and t.slot = :wafer and t.step = 3\nwhere r.eqp_id = :eqp_id and r.chamber = :chamber\ngroup by r.param, r.steps, r.lcl, r.ucl, r.duration_s, r.action, r.severity\norder by r.severity desc',
+    { kind: 'table' },
+    { picks: [pick('param')], limits: { value: 'w_max', lcl: 'lcl', ucl: 'ucl' } },
+  ),
+  fdc(
+    'card_fdc_alarms',
+    '알람 기록',
+    "select to_char(ts, 'MM-DD HH24:MI:SS') as ts, lot_id, slot, param, action\nfrom fdc_alarm\nwhere eqp_id = :eqp_id\norder by ts desc\nfetch first 50 rows only",
+    { kind: 'table' },
+    { picks: [pick('lot_id'), pick('slot', 'wafer'), pick('param')] },
+  ),
+  fdc(
+    'card_fdc_svid30',
+    '파라미터 30 개 · 지금 웨이퍼 STEP MAX',
+    'select s.svid, s.grp, max(t.value) as value, s.unit, r.lcl, r.ucl\nfrom fdc_svid s\njoin fdc_trace t on t.param = s.svid\njoin fdc_alarm_rule r on r.param = s.svid and r.step = t.step\nwhere t.lot_id = :lot_id and t.slot = :wafer and t.step = :step\ngroup by s.svid, s.grp, s.unit, s.ord, r.lcl, r.ucl\norder by s.ord',
+    { kind: 'chart', type: 'stat', x: 'svid', y: ['value'] },
+    { picks: [pick('svid', 'param')], limits: { lcl: 'lcl', ucl: 'ucl' } },
+  ),
+]
+
+const FDC_PLACE: [string, number, number, number, number][] = [
+  ['card_fdc_lots', 0, 0, 1, 1],
+  ['card_fdc_trace', 1, 0, 2, 2],
+  ['card_fdc_summary', 3, 0, 1, 1],
+  ['card_fdc_wmap', 0, 1, 1, 2],
+  ['card_fdc_status', 3, 1, 1, 1],
+  ['card_fdc_rules', 1, 2, 2, 1],
+  ['card_fdc_alarms', 3, 2, 1, 1],
+  ['card_fdc_params', 0, 3, 1, 2],
+  ['card_fdc_svid30', 1, 3, 3, 2],
+]
+
+export const seedFdcBoard: Board = {
+  ...base('board_fdc_trace', ['fdc']),
+  title: 'FDC 확인 · ETCH-03',
+  cells: FDC_PLACE.map(([cardId, x, y, w, h]) => ({ cardId, x, y, w, h })),
+  vars: { eqp_id: 'ETCH-03', chamber: 'CH-A', lot_id: 'L2611-07', wafer: '12', param: 'RF_REF_PWR', step: '3' },
+  conns: { 'FDC-DEMO': 'conn_fdc_demo' },
+}
 
 // gen.py PLACE — (카드, 열, 줄, 폭, 높이)
 const PLACE: [string, number, number, number, number][] = [

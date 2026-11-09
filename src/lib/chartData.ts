@@ -1,4 +1,7 @@
-import type { Cell, ChartType, QueryResult } from '../types'
+import type { Cell, ChartType, Limits, QueryResult } from '../types'
+import { colIndex as colIdx, hasLimits, limitCols, overOf, rowLimit, toNum } from './marks'
+
+export { toNum }
 
 /** 카드의 그래프 설정(CardView 의 chart 쪽) */
 export interface ChartSpec {
@@ -6,6 +9,14 @@ export interface ChartSpec {
   x: string
   y: string[]
   series?: string
+  focus?: string
+  phase?: string
+}
+
+/** 그래프 밖에서 오는 값: 카드의 한계 열, 겹침 모드가 고를 시리즈 이름(focus 변수의 지금 값) */
+export interface PrepareOpts {
+  limits?: Limits
+  focusValue?: string
 }
 
 /** 색 칸 수. 범주 색은 정해진 순서로만 쓰고, 넘치면 그리지 않고 알린다 */
@@ -16,6 +27,20 @@ export interface Series {
   name: string
   slot: number // 0 부터. 처음 나온 순서로 정해서, 거르거나 접어도 색이 바뀌지 않는다
   values: (number | null)[]
+  /** 겹침 모드의 회색 시리즈 */
+  muted?: boolean
+}
+
+/** 선 그래프에 얹는 것: x 마다 LCL · UCL, 구간, 넘은 구간, 가장 많이 넘은 점 */
+export interface LineExtras {
+  lcl?: (number | null)[]
+  ucl?: (number | null)[]
+  phases?: { from: number; to: number; name: string }[]
+  over?: { from: number; to: number }[]
+  /** 가장 많이 넘은 점. width 는 넘은 x 폭의 합(x 간격 × 넘은 점 수) */
+  peak?: { x: number; v: number; limit: number; side: 'ucl' | 'lcl'; width: number }
+  /** 겹침 모드: 고른 변수 · 값 · 그 값의 시리즈가 있는지 · 회색 시리즈 수 */
+  focus?: { var: string; value: string; found: boolean; others: number }
 }
 export interface XY {
   xKind: XKind
@@ -26,11 +51,14 @@ export interface XY {
 export interface Panel {
   title?: string
   data: XY
+  extras?: LineExtras
 }
 export interface HeatCell {
   xi: number
   yi: number
   v: number
+  /** 이 칸을 만든 첫 행(눌러서 변수 넣기 · 고른 칸 표시) */
+  row: number
 }
 export interface BoxGroup {
   name: string
@@ -47,13 +75,24 @@ export interface BoxGroup {
 export interface StatTile {
   label: string
   value: number | null
+  /** 값이 숫자가 아닌 글자(FAULT · RUN 같은 상태)면 그 글자를 큰 글자로 */
+  text?: string
   spark?: (number | null)[]
   delta?: number
   from?: string
+  /** 한계와 견줄 값(limits.value 열, 없으면 value)과 그 행의 한계 */
+  cmp?: number | null
+  lcl?: number | null
+  ucl?: number | null
+  /** 이 타일을 만든 행(이름 열 모양). 시간 열 모양은 시리즈의 마지막 행 */
+  row?: number
 }
 
-/** 숫자 타일은 많아야 이만큼(넘치면 알린다) */
-export const STAT_MAX = 24
+/** 숫자 타일은 많아야 이만큼(넘치면 알린다). 한 카드에 파라미터 30 개를 넣는 쓰임까지 */
+export const STAT_MAX = 40
+
+/** 겹침 모드에서 그리는 시리즈 수의 끝 */
+export const OVERLAY_MAX = 200
 
 export type Prepared =
   | { kind: 'lines'; type: 'line' | 'step' | 'area' | 'scatter'; panels: Panel[]; note?: string }
@@ -64,15 +103,6 @@ export type Prepared =
   | { kind: 'error'; message: string }
 
 const fail = (message: string): Prepared => ({ kind: 'error', message })
-
-export function toNum(v: Cell): number | null {
-  if (typeof v === 'number') return Number.isFinite(v) ? v : null
-  if (typeof v === 'string' && v.trim() !== '') {
-    const n = Number(v)
-    return Number.isFinite(n) ? n : null
-  }
-  return null
-}
 
 const DT_RE = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?$/
 const TIME_RE = /^(\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?$/
@@ -94,10 +124,7 @@ export function parseTime(v: Cell): number | null {
 
 const label = (v: Cell) => (v === null ? 'NULL' : String(v))
 
-function colIndex(result: QueryResult, name: string): number {
-  const want = name.trim().toLowerCase()
-  return result.columns.findIndex((c) => c.name.toLowerCase() === want)
-}
+const colIndex = colIdx
 
 function lookup(result: QueryResult, names: string[]): number[] | string {
   const idx = names.map((n) => colIndex(result, n))
@@ -119,8 +146,10 @@ function xKindOf(result: QueryResult, xi: number): XKind {
  * 행을 x 하나에 값 여럿인 모양으로 모은다.
  * 시리즈 열이 있으면 그 값마다 시리즈 하나(y 가 여럿이면 "시리즈 · y"), 없으면 y 열마다 시리즈 하나.
  */
+const xKeyFn = (xKind: XKind) => (v: Cell) => (xKind === 'time' ? parseTime(v) : xKind === 'num' ? toNum(v) : label(v))
+
 function collect(result: QueryResult, xi: number, yi: number[], si: number, xKind: XKind): { xs: number[]; labels: string[]; series: Series[]; groups: string[] } {
-  const keyOf = (v: Cell) => (xKind === 'time' ? parseTime(v) : xKind === 'num' ? toNum(v) : label(v))
+  const keyOf = xKeyFn(xKind)
   const order: (string | number)[] = []
   const seenX = new Map<string | number, string>()
   const names: string[] = []
@@ -150,7 +179,82 @@ function collect(result: QueryResult, xi: number, yi: number[], si: number, xKin
   return { xs, labels: order.map((k) => seenX.get(k)!), series, groups }
 }
 
-const capNote = (n: number) => (n > SLOTS ? `시리즈 ${n} 개 중 앞 ${SLOTS} 개만 그립니다. 표에서 모두 봅니다.` : undefined)
+const capNote = (n: number) => (n > SLOTS ? `시리즈 ${n} 개 중 앞 ${SLOTS} 개만 그립니다. 겹침 변수를 정하면 모두 그립니다.` : undefined)
+
+/** x 마다 값 하나: 그 x 의 행 중 값이 처음 있는 것. keys 는 collect 의 x 순서(cat 은 글자, 나머지는 xs) */
+function perX<T>(result: QueryResult, xi: number, ci: number, xKind: XKind, keys: (string | number)[], conv: (v: Cell) => T | null): (T | null)[] {
+  const keyOf = xKeyFn(xKind)
+  const m = new Map<string | number, T>()
+  for (const row of result.rows) {
+    const k = keyOf(row[xi])
+    if (k === null || m.has(k)) continue
+    const v = conv(row[ci])
+    if (v !== null) m.set(k, v)
+  }
+  return keys.map((k) => m.get(k) ?? null)
+}
+
+/**
+ * 선 그래프에 얹는 것을 만든다. 한계 열은 행마다 읽어서 x 마다 한 값으로(STEP 마다 한계가 달라도 된다).
+ * 넘은 구간 · 가장 많이 넘은 점은 targets(겹침 모드면 고른 시리즈, 아니면 그린 시리즈 모두)로 본다.
+ */
+function lineExtras(result: QueryResult, xi: number, xKind: XKind, xs: number[], labels: string[], targets: Series[], spec: ChartSpec, opts: PrepareOpts): LineExtras {
+  const keys = xKind === 'cat' ? labels : xs
+  const lc = limitCols(result, opts.limits)
+  const out: LineExtras = {}
+  if (lc.lcl >= 0) out.lcl = perX(result, xi, lc.lcl, xKind, keys, toNum)
+  if (lc.ucl >= 0) out.ucl = perX(result, xi, lc.ucl, xKind, keys, toNum)
+  const pi = colIndex(result, spec.phase)
+  if (pi >= 0) {
+    const names = perX(result, xi, pi, xKind, keys, (v) => (v === null ? null : label(v)))
+    const phases: NonNullable<LineExtras['phases']> = []
+    names.forEach((n, i) => {
+      if (n === null) return
+      const last = phases[phases.length - 1]
+      if (last && last.name === n) last.to = xs[i]
+      else phases.push({ from: xs[i], to: xs[i], name: n })
+    })
+    if (phases.length) out.phases = phases
+  }
+  if (out.lcl || out.ucl) {
+    const step = xs.length > 1 ? (xs[xs.length - 1] - xs[0]) / (xs.length - 1) : 1
+    const over: { from: number; to: number }[] = []
+    let run: { from: number; to: number } | null = null
+    let count = 0
+    let best = -Infinity
+    let peak: Omit<NonNullable<LineExtras['peak']>, 'width'> | undefined
+    xs.forEach((x, i) => {
+      const l = out.lcl?.[i] ?? null
+      const u = out.ucl?.[i] ?? null
+      let hit = false
+      for (const s of targets) {
+        const v = s.values[i]
+        const side = overOf(v, l, u)
+        if (!side || v === null) continue
+        hit = true
+        const limit = (side === 'ucl' ? u : l) as number
+        const ex = Math.abs(v - limit)
+        if (ex > best) {
+          best = ex
+          peak = { x, v, limit, side }
+        }
+      }
+      if (hit) {
+        count++
+        if (run) run.to = x + step / 2
+        else {
+          run = { from: x - step / 2, to: x + step / 2 }
+          over.push(run)
+        }
+      } else run = null
+    })
+    if (over.length && peak) {
+      out.over = over
+      out.peak = { ...peak, width: count * step }
+    }
+  }
+  return out
+}
 
 function quantile(sorted: number[], p: number): number {
   const i = (sorted.length - 1) * p
@@ -159,7 +263,7 @@ function quantile(sorted: number[], p: number): number {
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo)
 }
 
-export function prepare(result: QueryResult, spec: ChartSpec): Prepared {
+export function prepare(result: QueryResult, spec: ChartSpec, opts: PrepareOpts = {}): Prepared {
   if (!spec.x.trim()) return fail('그래프의 x 열을 정하세요')
   if (spec.y.length === 0) return fail('그래프의 y 열을 정하세요')
   const found = lookup(result, [spec.x, ...spec.y, ...(spec.series ? [spec.series] : [])])
@@ -175,15 +279,33 @@ export function prepare(result: QueryResult, spec: ChartSpec): Prepared {
     case 'scatter': {
       const xKind = xKindOf(result, xi)
       const all = collect(result, xi, yi, si, xKind)
+      const base = { xKind, xs: all.xs, labels: all.labels }
+      const extras = (targets: Series[]) => lineExtras(result, xi, xKind, all.xs, all.labels, targets, spec, opts)
+      // 겹침 모드: 같은 축에 모두 깔고, focus 변수 값과 이름이 같은 시리즈만 진하게(맨 위에) 그린다
+      if (spec.focus) {
+        const value = (opts.focusValue ?? '').trim()
+        const shown = all.series.slice(0, OVERLAY_MAX)
+        const hit = shown.find((s) => s.name === value)
+        const series = [...shown.filter((s) => s !== hit).map((s) => ({ ...s, muted: true })), ...(hit ? [{ ...hit, slot: 0 }] : [])]
+        const focus = { var: spec.focus, value, found: !!hit, others: shown.length - (hit ? 1 : 0) }
+        const note =
+          all.series.length > OVERLAY_MAX
+            ? `시리즈 ${all.series.length} 개 중 앞 ${OVERLAY_MAX} 개만 그립니다`
+            : hit
+              ? undefined
+              : `${spec.focus} = ${value || '(비어 있음)'} 인 시리즈가 없어 모두 회색으로 그립니다`
+        return { kind: 'lines', type: spec.type, panels: [{ data: { ...base, series }, extras: { ...extras(hit ? [hit] : shown), focus } }], note }
+      }
       // 시리즈가 넷 이하면 위아래로 나눠 그린다(축 하나에 단위가 다른 값을 겹치지 않는다)
       if (si >= 0 && all.groups.length > 1 && all.groups.length <= 4) {
         const panels = all.groups.map((g, gi) => {
           const series = all.series.filter((s) => (yi.length > 1 ? s.name.startsWith(`${g} · `) : s.name === g)).map((s) => ({ ...s, slot: gi }))
-          return { title: g, data: { xKind, xs: all.xs, labels: all.labels, series } }
+          return { title: g, data: { ...base, series }, extras: extras(series) }
         })
         return { kind: 'lines', type: spec.type, panels }
       }
-      return { kind: 'lines', type: spec.type, panels: [{ data: { xKind, xs: all.xs, labels: all.labels, series: all.series.slice(0, SLOTS) } }], note: capNote(all.series.length) }
+      const series = all.series.slice(0, SLOTS)
+      return { kind: 'lines', type: spec.type, panels: [{ data: { ...base, series }, extras: extras(series) }], note: capNote(all.series.length) }
     }
     case 'bar':
     case 'stacked-bar': {
@@ -223,12 +345,14 @@ export function prepare(result: QueryResult, spec: ChartSpec): Prepared {
       const xs: string[] = []
       const ys: string[] = []
       const acc = new Map<string, number>()
-      for (const row of result.rows) {
+      const first = new Map<string, number>()
+      for (const [ri, row] of result.rows.entries()) {
         const a = xKey(row[xi])
         const b = xKey(row[yy])
         if (!xs.includes(a)) xs.push(a)
         if (!ys.includes(b)) ys.push(b)
         const k = `${a}\u0000${b}`
+        if (!first.has(k)) first.set(k, ri)
         const v = vi >= 0 ? toNum(row[vi]) : 1
         if (v !== null) acc.set(k, (vi >= 0 ? 0 : (acc.get(k) ?? 0)) + v)
       }
@@ -238,7 +362,7 @@ export function prepare(result: QueryResult, spec: ChartSpec): Prepared {
       const cells: HeatCell[] = []
       for (const [k, v] of acc) {
         const [a, b] = k.split('\u0000')
-        cells.push({ xi: xs.indexOf(a), yi: ys.indexOf(b), v })
+        cells.push({ xi: xs.indexOf(a), yi: ys.indexOf(b), v, row: first.get(k)! })
       }
       if (cells.length === 0) return fail('그릴 칸이 없습니다')
       const vs = cells.map((c) => c.v)
@@ -256,26 +380,60 @@ export function prepare(result: QueryResult, spec: ChartSpec): Prepared {
     }
     case 'stat': {
       const xKind = xKindOf(result, xi)
+      // 한계: 타일을 만든 행의 LCL · UCL. 견줄 값은 limits.value 열, 없으면 타일 값
+      const lc = limitCols(result, opts.limits)
+      const lim = (ri: number | undefined, value: number | null) => {
+        if (!hasLimits(lc) || ri === undefined) return {}
+        const row = result.rows[ri]
+        return { cmp: lc.value >= 0 ? toNum(row[lc.value]) : value, lcl: rowLimit(row, lc.lcl), ucl: rowLimit(row, lc.ucl) }
+      }
       if (xKind === 'time') {
         // 시간 열: y(시리즈가 있으면 시리즈 값)마다 타일 하나. 큰 숫자는 마지막 값
         const all = collect(result, xi, yi, si, 'time')
+        // 시리즈마다 시각이 가장 늦은 행(한계 · 눌러서 변수 넣기에 쓴다)
+        const lastRow = new Map<string, { t: number; ri: number }>()
+        result.rows.forEach((row, ri) => {
+          const t = parseTime(row[xi])
+          if (t === null) return
+          const g = si >= 0 ? label(row[si]) : ''
+          for (const y of yi) {
+            const name = si < 0 ? result.columns[y].name : yi.length > 1 ? `${g} · ${result.columns[y].name}` : g
+            const cur = lastRow.get(name)
+            if (!cur || t >= cur.t) lastRow.set(name, { t, ri })
+          }
+        })
         const tiles = all.series.slice(0, STAT_MAX).map((s) => {
           const idx = s.values.map((v, i) => (v === null ? -1 : i)).filter((i) => i >= 0)
           const first = idx[0]
           const last = idx[idx.length - 1]
           const value = last === undefined ? null : s.values[last]
+          const ri = lastRow.get(s.name)?.ri
           return {
             label: s.name,
             value,
             spark: s.values,
+            row: ri,
+            ...lim(ri, value),
             ...(idx.length > 1 && value !== null ? { delta: value - (s.values[first] as number), from: all.labels[first] } : {}),
           }
         })
         return { kind: 'stat', tiles, note: all.series.length > STAT_MAX ? `타일 ${all.series.length} 개 중 앞 ${STAT_MAX} 개만 보입니다` : undefined }
       }
-      // 이름 열: 행마다 타일. y 가 여럿이면 "이름 · y"
+      // 이름 열: 행마다 타일. y 가 여럿이면 "이름 · y". 값이 숫자가 아닌 글자면 그 글자(상태)를 보인다
       const tiles: StatTile[] = []
-      for (const row of result.rows) for (const y of yi) tiles.push({ label: yi.length > 1 ? `${label(row[xi])} · ${result.columns[y].name}` : label(row[xi]), value: toNum(row[y]) })
+      result.rows.forEach((row, ri) => {
+        for (const y of yi) {
+          const value = toNum(row[y])
+          const raw = row[y]
+          tiles.push({
+            label: yi.length > 1 ? `${label(row[xi])} · ${result.columns[y].name}` : label(row[xi]),
+            value,
+            ...(value === null && raw !== null && String(raw).trim() !== '' ? { text: String(raw) } : {}),
+            row: ri,
+            ...lim(ri, value),
+          })
+        }
+      })
       return { kind: 'stat', tiles: tiles.slice(0, STAT_MAX), note: tiles.length > STAT_MAX ? `타일 ${tiles.length} 개 중 앞 ${STAT_MAX} 개만 보입니다. 표에서 모두 봅니다.` : undefined }
     }
     case 'box': {
