@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store'
-import type { Board, QueryCard } from '../types'
+import type { Board, Card, QueryCard } from '../types'
 import { runner, type QueryState } from '../lib/runner'
 import { extractBinds, pickBinds } from '../lib/sql'
+import { resolveConn } from '../lib/conn'
 import { fmtTime, now } from '../lib/util'
 import Topbar from '../components/Topbar'
 import VarBand from '../components/board/VarBand'
+import ConnBand from '../components/board/ConnBand'
 import BoardGrid, { type Placed } from '../components/board/BoardGrid'
 import CardDrawer from '../components/board/CardDrawer'
 
@@ -38,6 +40,7 @@ function BoardView({ board }: { board: Board }) {
   const boards = useStore((s) => s.boards)
   const cards = useStore((s) => s.cards)
   const connections = useStore((s) => s.connections)
+  const envs = useStore((s) => s.envs)
   const upsertBoard = useStore((s) => s.upsertBoard)
 
   // 조회 결과 · 상태는 페이지 로컬. IndexedDB 에 저장하지 않는다
@@ -63,14 +66,17 @@ function BoardView({ board }: { board: Board }) {
     for (const c of queryCards) for (const b of extractBinds(c.sql)) if (!out.includes(b)) out.push(b)
     return out
   }, [queryCards])
+  // 연결 띠: 조회 카드가 쓰는 연결 이름. 작업판이 이름마다 실제 연결을 고른다
+  const connNamesUsed = useMemo(() => [...new Set(queryCards.map((c) => c.connection))], [queryCards])
+  const connOf = useCallback((card: Card) => (card.kind === 'query' ? resolveConn(card.connection, { conns: board.conns }, connections, envs) : undefined), [board.conns, connections, envs])
 
   const runCard = useCallback(
     (card: QueryCard) => {
       const n = (seq.current[card.id] ?? 0) + 1
       seq.current[card.id] = n
       setRuns((r) => ({ ...r, [card.id]: { status: 'loading' } }))
-      const conn = connections.find((c) => c.id === card.connectionId)
-      const p = conn ? runner.run(card, conn, pickBinds(card.sql, board.vars)) : Promise.reject(new Error('연결이 없습니다'))
+      const conn = connOf(card)
+      const p = conn ? runner.run(card, conn, pickBinds(card.sql, board.vars)) : Promise.reject(new Error(`연결 ${card.connection || '(없음)'} 이 없습니다. 설정 › DB 연결에서 만드세요`))
       p.then(
         (result) => {
           if (seq.current[card.id] === n) setRuns((r) => ({ ...r, [card.id]: { status: 'ok', result, at: now() } }))
@@ -80,19 +86,19 @@ function BoardView({ board }: { board: Board }) {
         },
       )
     },
-    [connections, board.vars],
+    [connOf, board.vars],
   )
 
   // 처음 열 때 전부, 그 뒤에는 쓰는 변수 값(또는 SQL · 연결)이 바뀐 카드만 다시 조회
   useEffect(() => {
     for (const card of queryCards) {
-      const key = JSON.stringify([card.connectionId, card.sql, pickBinds(card.sql, board.vars)])
+      const key = JSON.stringify([connOf(card)?.id, card.sql, pickBinds(card.sql, board.vars)])
       if (keys.current[card.id] !== key) {
         keys.current[card.id] = key
         runCard(card)
       }
     }
-  }, [queryCards, board.vars, runCard])
+  }, [queryCards, board.vars, runCard, connOf])
 
   const runAll = () => queryCards.forEach(runCard)
   const lastAt = Object.values(runs).reduce<string | undefined>((m, r) => (r.status !== 'loading' && (!m || r.at > m) ? r.at : m), undefined)
@@ -106,6 +112,13 @@ function BoardView({ board }: { board: Board }) {
     (vars: Record<string, string>) => {
       const b = useStore.getState().boards.find((x) => x.id === board.id)
       if (b) void upsertBoard({ ...b, vars })
+    },
+    [board.id, upsertBoard],
+  )
+  const pickConn = useCallback(
+    (name: string, connId: string) => {
+      const b = useStore.getState().boards.find((x) => x.id === board.id)
+      if (b) void upsertBoard({ ...b, conns: { ...b.conns, [name]: connId } })
     },
     [board.id, upsertBoard],
   )
@@ -136,12 +149,14 @@ function BoardView({ board }: { board: Board }) {
             ✎ 편집
           </Link>
         </Topbar>
+        <ConnBand names={connNamesUsed} connOf={(name) => resolveConn(name, { conns: board.conns }, connections, envs)} onPick={pickConn} />
         <VarBand names={bindNames} vars={board.vars} onSave={saveVars} />
       </div>
-      <BoardGrid cells={cells} runs={runs} boardVars={board.vars} checks={checks} onChecks={setCardChecks} selectedId={selectedId} onOpen={open} />
+      <BoardGrid cells={cells} connOf={connOf} runs={runs} boardVars={board.vars} checks={checks} onChecks={setCardChecks} selectedId={selectedId} onOpen={open} />
       {selected && (
         <CardDrawer
           card={selected}
+          conn={connOf(selected)}
           run={runs[selected.id]}
           boardVars={board.vars}
           checks={checks[selected.id]}

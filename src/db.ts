@@ -37,6 +37,8 @@ export class WorkBenchDB extends Dexie {
       cards: 'id, kind, connectionId, updatedAt',
       boards: 'id, updatedAt',
     })
+    // 카드가 연결 id 대신 연결 이름을 가리킨다. 값 옮기기는 store.init 의 migrateCards 가 한다(가져오기 파일도 같은 길)
+    this.version(3).stores({ cards: 'id, kind, connection, updatedAt' })
   }
 }
 

@@ -375,6 +375,30 @@ pre.code { background: var(--code-bg); color: var(--code-text); padding: 12px 14
 .sqlbox pre.code { margin: 8px 0; font-size: 12px; }
 .sqlbox .bind { color: var(--accent); font-weight: 600; }
 
+/* ===== 설정 · DB 연결 ===== */
+.cband { margin-bottom: 8px; }
+.vpill select { border: 0; background: transparent; color: var(--text); font-family: inherit; font-size: 13px; font-weight: 600; padding: 0 4px; outline: none; cursor: pointer; max-width: 36ch; }
+.cb-none { font-size: 12px; color: var(--warn); padding: 0 8px 0 2px; }
+.crow { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); margin-bottom: 8px; overflow: hidden; }
+.crow.open { border-color: var(--accent); }
+.crow.missing { border-style: dashed; background: transparent; }
+.crow-h { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border: 0; background: none; color: var(--text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.crow-h:hover { background: var(--surface-2); }
+.crow-h.static { cursor: default; }
+.crow-h.static:hover { background: none; }
+.crow-h .chev { color: var(--muted); width: 10px; }
+.crow-h .nm { font-weight: 700; min-width: 72px; }
+.crow-h .addr { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted); }
+.crow-b { padding: 12px 14px; border-top: 1px solid var(--border); }
+.conn-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.field .check input { width: auto; padding: 0; flex: none; }
+.field .check { color: var(--text); }
+.conn-str { font-size: 12px; padding: 6px 9px; border-radius: 7px; background: var(--surface-2); color: var(--text); overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .conn-grid { grid-template-columns: minmax(0, 1fr); }
+  .crow-h { flex-wrap: wrap; }
+}
+
 /* ===== 설정 · 작업대 편집 ===== */
 .subtabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: -6px 0 16px; }
 .subtabs a { padding: 7px 12px; font-size: 13px; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }

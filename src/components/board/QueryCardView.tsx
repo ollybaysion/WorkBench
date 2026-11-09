@@ -6,9 +6,9 @@ import { useStore } from '../../store'
 import ResultTable, { ROW_H_COMPACT } from './ResultTable'
 
 /** 연결 태그 `FDC-L1 · production`. 좁은 카드에서는 환경 이름을 숨긴다(index.css 컨테이너 쿼리) */
-export function ConnTag({ conn }: { conn?: Connection }) {
+export function ConnTag({ conn, name }: { conn?: Connection; name: string }) {
   const env = useStore((s) => s.envs.find((e) => e.id === conn?.envId))
-  if (!conn) return <span className="qc-conn err">연결 없음</span>
+  if (!conn) return <span className="qc-conn err">⛁ {name || '연결'} 없음</span>
   return (
     <span className="qc-conn" title={`${conn.host}:${conn.port}/${conn.service} · ${conn.user}`}>
       ⛁ {conn.name}
@@ -49,8 +49,7 @@ export function QueryFoot({ run }: { run?: QueryState }) {
   )
 }
 
-export default function QueryCardView({ card, run, selected, onOpen }: { card: QueryCard; run?: QueryState; selected: boolean; onOpen: () => void }) {
-  const conn = useStore((s) => s.connections.find((c) => c.id === card.connectionId))
+export default function QueryCardView({ card, conn, run, selected, onOpen }: { card: QueryCard; conn?: Connection; run?: QueryState; selected: boolean; onOpen: () => void }) {
   const bodyRef = useRef<HTMLDivElement>(null)
   // 표는 들어가는 만큼만: 몸통 높이에서 머리 행을 빼고 행 높이로 나눈다
   const [maxRows, setMaxRows] = useState<number>()
@@ -69,7 +68,7 @@ export default function QueryCardView({ card, run, selected, onOpen }: { card: Q
           {card.title}
         </span>
         {card.view.kind === 'chart' && <span className="pill gray">{card.view.type}</span>}
-        <ConnTag conn={conn} />
+        <ConnTag conn={conn} name={card.connection} />
         <QueryStatus run={run} />
         <button
           type="button"

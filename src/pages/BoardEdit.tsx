@@ -4,6 +4,7 @@ import { useStore } from '../store'
 import type { Board, BoardCell, Card } from '../types'
 import { COLS, append, compact, place } from '../lib/layout'
 import { now, uid } from '../lib/util'
+import { connNames } from '../lib/conn'
 import Topbar from '../components/Topbar'
 import SettingsTabs from '../components/SettingsTabs'
 import EditGrid from '../components/board/EditGrid'
@@ -93,7 +94,7 @@ function BoardEditor({ board }: { board: Board }) {
       tags: [],
       kind: 'query',
       title: '',
-      connectionId: connections[0]?.id ?? '',
+      connection: connNames(connections)[0] ?? '',
       sql: '',
       keyColumns: [],
       view: { kind: 'table' },
@@ -232,6 +233,7 @@ function BoardEditor({ board }: { board: Board }) {
               isNew={!!draftSel}
               size={size}
               boardVars={board.vars}
+              boardConns={board.conns}
               onSave={save}
               onCancel={() => {
                 dirty.current = false

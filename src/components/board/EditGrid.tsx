@@ -30,7 +30,6 @@ interface Props {
 
 /** 작업판 배치 편집. 타일을 끌어 옮기고, 오른쪽 아래 모서리를 당겨 크기를 바꾼다. 키보드는 방향키 · Shift+방향키 */
 export default function EditGrid({ cells, selectedId, onSelect, onChange, onLower }: Props) {
-  const connections = useStore((s) => s.connections)
   const commands = useStore((s) => s.commands)
   const gridRef = useRef<HTMLDivElement>(null)
   const drag = useRef<Drag | null>(null)
@@ -113,7 +112,7 @@ export default function EditGrid({ cells, selectedId, onSelect, onChange, onLowe
         const ghost = preview?.id === cell.cardId
         const meta =
           card.kind === 'query'
-            ? `⛁ ${card.id} · ${connections.find((c) => c.id === card.connectionId)?.name ?? '연결 없음'}`
+            ? `⛁ ${card.id} · ${card.connection || '연결 없음'}`
             : `⌘ ${card.id} · ${commands.find((c) => c.id === card.commandId)?.title ?? '명령 없음'}`
         return (
           <div
