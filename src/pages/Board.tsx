@@ -1,17 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store'
 import type { Board, QueryCard } from '../types'
-import { fixtureRunner, type QueryState, type Runner } from '../lib/runner'
+import { runner, type QueryState } from '../lib/runner'
 import { extractBinds, pickBinds } from '../lib/sql'
 import { fmtTime, now } from '../lib/util'
 import Topbar from '../components/Topbar'
 import VarBand from '../components/board/VarBand'
 import BoardGrid, { type Placed } from '../components/board/BoardGrid'
 import CardDrawer from '../components/board/CardDrawer'
-
-// 6 단계에서 서버 실행기로 바꿔 끼운다. 페이지는 Runner 인터페이스만 쓴다
-const runner: Runner = fixtureRunner
 
 const byTitle = (a: Board, b: Board) => a.title.localeCompare(b.title, 'ko')
 
@@ -135,6 +132,9 @@ function BoardView({ board }: { board: Board }) {
           <button type="button" className="btn" onClick={runAll}>
             ↻ 다시 조회
           </button>
+          <Link className="btn" to={`/settings/board/${board.id}`}>
+            ✎ 편집
+          </Link>
         </Topbar>
         <VarBand names={bindNames} vars={board.vars} onSave={saveVars} />
       </div>

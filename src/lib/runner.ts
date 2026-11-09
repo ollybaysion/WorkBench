@@ -24,3 +24,6 @@ export const fixtureRunner: Runner = {
     return f.result
   },
 }
+
+/** 페이지가 쓰는 실행기. 6 단계에서 서버 실행기로 바꿔 끼운다 */
+export const runner: Runner = fixtureRunner
