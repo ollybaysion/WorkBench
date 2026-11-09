@@ -484,6 +484,9 @@ pre.code { background: var(--code-bg); color: var(--code-text); padding: 12px 14
 .qc-seg button + button { border-left: 1px solid var(--border); }
 .qc-seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
 .drawer-chart { height: 270px; flex: none; }
+.board-rename { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0; }
+.board-rename .input { width: min(320px, 60vw); }
+.board-rename .input[aria-invalid="true"] { border-color: var(--danger); }
 .cf-err { font-size: 12px; color: var(--danger); }
 .bedit-form pre.code { font-size: 12px; }
 @media (max-width: 1100px) {

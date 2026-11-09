@@ -51,6 +51,7 @@ function BoardEditor({ board }: { board: Board }) {
   const showToast = useStore((s) => s.showToast)
 
   const [sel, setSel] = useState<Selection | null>(null)
+  const [renaming, setRenaming] = useState(false)
   const dirty = useRef(false)
   const onDirty = useCallback((v: boolean) => {
     dirty.current = v
@@ -146,22 +147,31 @@ function BoardEditor({ board }: { board: Board }) {
             <label className="small muted" htmlFor="bedit-board">
               작업판
             </label>
-            <select
-              id="bedit-board"
-              className="input"
-              style={{ width: 'auto' }}
-              value={board.id}
-              onChange={(e) => {
-                if (dirty.current && !window.confirm(DISCARD)) return
-                navigate(`/settings/board/${e.target.value}`)
-              }}
-            >
-              {[...boards].sort(byTitle).map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.title}
-                </option>
-              ))}
-            </select>
+            {renaming ? (
+              <BoardRename board={board} onDone={() => setRenaming(false)} />
+            ) : (
+              <>
+                <select
+                  id="bedit-board"
+                  className="input"
+                  style={{ width: 'auto' }}
+                  value={board.id}
+                  onChange={(e) => {
+                    if (dirty.current && !window.confirm(DISCARD)) return
+                    navigate(`/settings/board/${e.target.value}`)
+                  }}
+                >
+                  {[...boards].sort(byTitle).map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.title}
+                    </option>
+                  ))}
+                </select>
+                <button type="button" className="btn small" onClick={() => setRenaming(true)}>
+                  ✎ 이름 바꾸기
+                </button>
+              </>
+            )}
             <span className="sp" />
             <button type="button" className="btn primary" onClick={addCard}>
               + 카드 추가
@@ -250,5 +260,67 @@ function BoardEditor({ board }: { board: Board }) {
         </div>
       </div>
     </>
+  )
+}
+
+const TITLE_MAX = 60
+
+/** 작업판 이름 바꾸기. Enter 로 저장, Esc 로 취소. 빈 이름은 받지 않는다 */
+function BoardRename({ board, onDone }: { board: Board; onDone: () => void }) {
+  const upsertBoard = useStore((s) => s.upsertBoard)
+  const showToast = useStore((s) => s.showToast)
+  const [title, setTitle] = useState(board.title)
+  const [busy, setBusy] = useState(false)
+  const next = title.trim()
+  const problem = !next ? '이름을 넣으세요' : next.length > TITLE_MAX ? `이름은 ${TITLE_MAX} 자까지입니다` : undefined
+
+  const save = async () => {
+    if (problem || busy) return
+    if (next === board.title) return onDone()
+    setBusy(true)
+    try {
+      // 변수 띠가 그 사이 값을 바꿨을 수 있으니 저장소의 최신 작업판에 이름만 얹는다
+      const b = useStore.getState().boards.find((x) => x.id === board.id) ?? board
+      await upsertBoard({ ...b, title: next })
+      showToast(`작업판 이름을 "${next}" 로 바꿨습니다`)
+      onDone()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form
+      className="board-rename"
+      onSubmit={(e) => {
+        e.preventDefault()
+        void save()
+      }}
+    >
+      <input
+        id="bedit-board"
+        className="input"
+        value={title}
+        maxLength={TITLE_MAX + 20}
+        onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') onDone()
+        }}
+        aria-invalid={!!problem}
+        aria-describedby={problem ? 'bedit-board-err' : undefined}
+        autoFocus
+      />
+      <button type="submit" className="btn small primary" disabled={!!problem || busy}>
+        저장
+      </button>
+      <button type="button" className="btn small" onClick={onDone}>
+        취소
+      </button>
+      {problem && (
+        <span id="bedit-board-err" className="cf-err">
+          {problem}
+        </span>
+      )}
+    </form>
   )
 }
