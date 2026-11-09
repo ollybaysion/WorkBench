@@ -1,11 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
 import cronstrue from 'cronstrue'
 import 'cronstrue/locales/ko'
 import { dump, load } from 'js-yaml'
 import { useStore } from '../store'
-import { copyText, now, todayStr, uid } from '../lib/util'
+import { copyText, download, todayStr, uid } from '../lib/util'
 import Topbar from '../components/Topbar'
 
 type ToolId = 'cron' | 'json' | 'b64' | 'time' | 'tpl' | 'regex' | 'gen' | 'diff'
@@ -264,9 +263,6 @@ function TimeTool() {
 type TplKind = 'incident' | 'deploy'
 
 function TemplateTool() {
-  const copy = useCopy()
-  const navigate = useNavigate()
-  const upsertNote = useStore((s) => s.upsertNote)
   const userName = useStore((s) => s.settings.userName)
   const showToast = useStore((s) => s.showToast)
   const [kind, setKind] = useState<TplKind>('incident')
@@ -303,12 +299,23 @@ ${dep.changes}
 문제 발생 시 이전 버전으로 즉시 롤백합니다.
 `
 
-  const save = async () => {
-    const t = now()
-    const id = uid()
-    await upsertNote({ id, createdAt: t, updatedAt: t, title, folder: kind === 'incident' ? '장애 보고' : '배포', tags: kind === 'incident' ? ['장애'] : ['배포'], content: md })
-    showToast('지식 베이스에 저장했습니다')
-    navigate(`/notes/${id}`)
+  const outRef = useRef<HTMLDivElement>(null)
+
+  // 복사가 안 되면 본문을 선택해 둔다. 사용자는 Ctrl+C 로 복사한다
+  const copyMd = async () => {
+    if (await copyText(md)) return showToast('Markdown 을 복사했습니다')
+    const el = outRef.current
+    const sel = window.getSelection()
+    if (el && sel) {
+      sel.selectAllChildren(el)
+      showToast('복사하지 못했습니다. 본문을 선택했으니 Ctrl+C 로 복사하세요')
+    } else showToast('복사하지 못했습니다')
+  }
+
+  const downloadMd = () => {
+    // 파일 이름에 쓸 수 없는 글자는 - 로 바꾼다
+    download(`${title.replace(/[\\/:*?"<>|]+/g, '-')}.md`, md, 'text/markdown;charset=utf-8')
+    showToast('.md 파일을 내려받았습니다')
   }
 
   const fieldI = (k: keyof typeof inc, label: string) => (
@@ -376,14 +383,17 @@ ${dep.changes}
           </label>
         </>
       )}
-      <div className="out">{md}</div>
+      <div className="out" ref={outRef}>
+        {md}
+      </div>
       <div className="btn-row" style={{ marginTop: 8 }}>
-        <button type="button" className="btn small" onClick={() => void copy(md)}>
+        <button type="button" className="btn small primary" onClick={() => void copyMd()}>
           Markdown 복사
         </button>
-        <button type="button" className="btn small primary" onClick={() => void save()}>
-          지식 베이스에 저장
+        <button type="button" className="btn small" onClick={downloadMd}>
+          .md 받기
         </button>
+        <span className="small muted">AKG 에 올릴 때 이 본문을 씁니다.</span>
       </div>
     </>
   )

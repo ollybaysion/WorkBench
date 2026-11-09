@@ -85,6 +85,8 @@ p { margin: 0 0 8px; }
 .split { display: grid; grid-template-columns: 280px 1fr; gap: 14px; align-items: start; }
 .split.wide { grid-template-columns: 340px 1fr; }
 
+.dash { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.dash-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .stat { display: flex; flex-direction: column; gap: 2px; }
 .stat .v { font-size: 26px; font-weight: 700; line-height: 1.1; }
 .stat .l { font-size: 12px; color: var(--muted); }
@@ -106,7 +108,6 @@ p { margin: 0 0 8px; }
 .list li:last-child { border-bottom: 0; }
 .list .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .list .m { font-size: 12px; color: var(--muted); white-space: nowrap; }
-.list li.done .t { text-decoration: line-through; color: var(--muted); }
 
 .row-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); margin-bottom: 8px; font-size: 13px; cursor: pointer; }
 .row-item:hover { border-color: var(--accent); }
@@ -135,11 +136,6 @@ pre.code { background: var(--code-bg); color: var(--code-text); padding: 12px 14
 .check input { margin-top: 3px; }
 .check.done { color: var(--muted); text-decoration: line-through; }
 
-.tree .d { padding: 8px 8px 2px; font-weight: 600; font-size: 12px; color: var(--muted); }
-.tree .f { padding: 5px 8px; border-radius: 6px; cursor: pointer; color: var(--text); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tree .f:hover { background: var(--surface-2); }
-.tree .f.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-
 .progress { height: 8px; background: var(--surface-2); border-radius: 999px; overflow: hidden; margin: 6px 0 10px; }
 .progress i { display: block; height: 100%; background: var(--ok); transition: width .3s; }
 
@@ -158,16 +154,6 @@ pre.code { background: var(--code-bg); color: var(--code-text); padding: 12px 14
 .tool.link { background: var(--surface-2); } .tool.link .tool-h { color: var(--muted); }
 .tool pre.code { font-size: 12px; padding: 8px 10px; }
 .timer-display { font-size: 24px; font-weight: 700; font-family: "JetBrains Mono", monospace; }
-
-.kanban { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.col { background: var(--surface-2); border-radius: 10px; padding: 10px; min-height: 200px; }
-.col h5 { margin: 0 0 8px; font-size: 13px; display: flex; align-items: center; gap: 6px; }
-.col h5 .n { margin-left: auto; font-size: 11px; color: var(--muted); }
-.tcard { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; font-size: 13px; margin-bottom: 8px; }
-.tcard .tt { font-weight: 500; margin-bottom: 4px; }
-.tcard .tm { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 11px; color: var(--muted); }
-.tcard .tm .btn-row { margin-left: auto; }
-.tcard.overdue .tt::before { content: "⚠ "; color: var(--danger); }
 
 .tools { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
 .tool-tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; font-size: 13px; cursor: pointer; text-align: left; color: var(--text); }
@@ -200,6 +186,33 @@ pre.code { background: var(--code-bg); color: var(--code-text); padding: 12px 14
 .md blockquote { margin: 8px 0; padding: 4px 12px; border-left: 3px solid var(--border); color: var(--muted); }
 .md a.wiki { background: var(--accent-soft); padding: 0 4px; border-radius: 4px; text-decoration: none; }
 
+/* ===== 치트시트 ===== */
+.cs { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 14px; align-items: start; }
+.cs-body { min-width: 0; }
+.cs-body .md > :first-child { margin-top: 0; }
+.cs-body .md > h2 { scroll-margin-top: 16px; }
+/* 명령 줄을 끊지 않고 가로로 스크롤한다. 오른쪽은 복사 단추 자리 */
+.cs-body .md pre.code { white-space: pre; word-break: normal; padding-right: 64px; }
+/* 마우스가 있으면 복사 단추는 코드 위에 올렸을 때 보인다. 터치 · 좁은 화면은 단추 자리를 코드 위에 따로 둔다 */
+@media (hover: hover) and (min-width: 901px) {
+  .cs-body .codebox .copy { opacity: 0; transition: opacity .15s; }
+  .cs-body .codebox:hover .copy, .cs-body .codebox:focus-within .copy { opacity: 1; }
+}
+@media (hover: none) and (min-width: 901px) {
+  .cs-body .md pre.code { padding-top: 40px; padding-right: 14px; }
+}
+.cs-toc { position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto; display: flex; flex-direction: column; gap: 1px; padding: 12px 10px; }
+.cs-toc h4 { margin: 0 6px 6px; font-size: 12px; color: var(--muted); }
+.cs-toc button { border: 0; background: none; color: var(--text); text-align: left; font-size: 13px; padding: 5px 6px; border-radius: 6px; cursor: pointer; overflow-wrap: anywhere; }
+.cs-toc button:hover { background: var(--surface-2); color: var(--accent); }
+@media (max-width: 900px) {
+  .cs { grid-template-columns: 1fr; }
+  .cs-toc { order: -1; position: static; max-height: none; flex-direction: row; flex-wrap: wrap; gap: 4px; }
+  .cs-toc h4 { display: none; }
+  .cs-toc button { background: var(--surface-2); font-size: 12px; padding: 3px 8px; }
+  .cs-body .md pre.code { padding-top: 40px; padding-right: 14px; }
+}
+
 /* ===== Palette ===== */
 .palette-bg { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 100; display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh; }
 .palette { width: min(640px, 92vw); background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; }
@@ -207,7 +220,7 @@ pre.code { background: var(--code-bg); color: var(--code-text); padding: 12px 14
 .palette ul { list-style: none; margin: 0; padding: 6px; max-height: 50vh; overflow-y: auto; }
 .palette li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 14px; }
 .palette li.on, .palette li:hover { background: var(--accent-soft); }
-.palette li .k { font-size: 11px; color: var(--muted); width: 56px; flex: none; }
+.palette li .k { font-size: 11px; color: var(--muted); width: 72px; flex: none; white-space: nowrap; }
 .palette li .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .palette li .s { font-size: 12px; color: var(--muted); max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -272,7 +285,7 @@ pre.code { background: var(--code-bg); color: var(--code-text); padding: 12px 14
   .nav-item .n { display: none; }
   .main { padding: 14px 16px 60px; }
   .split, .split.wide { grid-template-columns: 1fr; }
-  .kanban { grid-template-columns: 1fr; }
+  .dash { grid-template-columns: 1fr; }
   .search-btn { display: none; }
 }
 

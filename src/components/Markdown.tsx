@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import type { Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useStore } from '../store'
 import { copyText } from '../lib/util'
 
@@ -46,7 +46,7 @@ export function CodeBox({ text, children }: { text: string; children?: ReactNode
 interface Props {
   content: string
   /**
-   * [[대상]] 을 앱 안 주소로 바꾼다. 주면 노트 · 런북 제목 찾기 대신 이것을 쓴다.
+   * [[대상]] 을 앱 안 주소로 바꾼다. 주지 않으면 같은 제목의 런북으로 간다.
    * null 을 돌려주면 링크 없이 글자만 그린다.
    */
   wikiHref?: (target: string) => string | null
@@ -55,9 +55,12 @@ interface Props {
 }
 
 export default function Markdown({ content, wikiHref, img }: Props) {
-  const navigate = useNavigate()
-  const notes = useStore((s) => s.notes)
   const runbooks = useStore((s) => s.runbooks)
+  const runbookHref = (title: string) => {
+    const rb = runbooks.find((r) => r.title === title)
+    return rb ? `/runbooks/${rb.id}` : null
+  }
+  const toHref = wikiHref ?? runbookHref
 
   const components: Components = {
     pre: ({ children }) => {
@@ -71,32 +74,13 @@ export default function Markdown({ content, wikiHref, img }: Props) {
     ),
     a: ({ href, children }) => {
       if (href?.startsWith(WIKI_PREFIX)) {
-        const title = decodeURIComponent(href.slice(WIKI_PREFIX.length))
-        if (wikiHref) {
-          const to = wikiHref(title)
-          return to ? (
-            <Link className="wiki" to={to}>
-              {children}
-            </Link>
-          ) : (
-            <>{children}</>
-          )
-        }
-        return (
-          <a
-            className="wiki"
-            href="#"
-            onClick={(e) => {
-              e.preventDefault()
-              const note = notes.find((n) => n.title === title)
-              if (note) return navigate(`/notes/${note.id}`)
-              const rb = runbooks.find((r) => r.title === title)
-              if (rb) return navigate(`/runbooks/${rb.id}`)
-              navigate('/notes')
-            }}
-          >
+        const to = toHref(decodeURIComponent(href.slice(WIKI_PREFIX.length)))
+        return to ? (
+          <Link className="wiki" to={to}>
             {children}
-          </a>
+          </Link>
+        ) : (
+          <>{children}</>
         )
       }
       return (

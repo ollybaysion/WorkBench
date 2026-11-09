@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store'
+import { CHEATSHEETS } from '../lib/cheatsheets'
 
 interface Hit {
   kind: string
@@ -31,10 +32,8 @@ export default function CommandPalette() {
 
 function PaletteDialog({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate()
-  const notes = useStore((s) => s.notes)
   const commands = useStore((s) => s.commands)
   const runbooks = useStore((s) => s.runbooks)
-  const tasks = useStore((s) => s.tasks)
   const [q, setQ] = useState('')
   const [sel, setSel] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -47,12 +46,11 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
     const s = q.trim().toLowerCase()
     const m = (...fields: (string | undefined)[]) => !s || fields.some((f) => f?.toLowerCase().includes(s))
     const out: Hit[] = []
-    for (const n of notes) if (m(n.title, n.content, n.tags.join(' '))) out.push({ kind: '📚 노트', title: n.title, sub: n.folder, to: `/notes/${n.id}` })
     for (const c of commands) if (m(c.title, c.template, c.tags.join(' '))) out.push({ kind: '⌘ 명령', title: c.title, sub: c.template, to: `/commands/${c.id}` })
     for (const r of runbooks) if (m(r.title, r.description, r.tags.join(' '))) out.push({ kind: '🔁 런북', title: r.title, sub: r.description ?? '', to: `/runbooks/${r.id}` })
-    for (const t of tasks) if (m(t.title, t.tags.join(' '))) out.push({ kind: '📋 업무', title: t.title, sub: t.due ?? '', to: '/tasks' })
+    for (const c of CHEATSHEETS) if (m(c.title, c.body)) out.push({ kind: '📄 치트시트', title: c.title, sub: '', to: `/cheatsheet/${c.tool}` })
     return out.slice(0, 50)
-  }, [q, notes, commands, runbooks, tasks])
+  }, [q, commands, runbooks])
 
   const go = (h: Hit | undefined) => {
     if (!h) return
@@ -79,7 +77,7 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
       <div className="palette" onMouseDown={(e) => e.stopPropagation()}>
         <input
           ref={inputRef}
-          placeholder="노트·명령·런북·업무 검색…  (↑↓ 이동 · Enter 열기 · Esc 닫기)"
+          placeholder="명령·런북·치트시트 검색…  (↑↓ 이동 · Enter 열기 · Esc 닫기)"
           value={q}
           onChange={(e) => {
             setQ(e.target.value)

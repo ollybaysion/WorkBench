@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { useStore } from '../store'
 
-export function SearchButton({ label = '노트·명령·런북 검색' }: { label?: string }) {
+export function SearchButton({ label = '명령·런북·치트시트 검색' }: { label?: string }) {
   const setPalette = useStore((s) => s.setPalette)
   return (
     <button type="button" className="search-btn" onClick={() => setPalette(true)}>

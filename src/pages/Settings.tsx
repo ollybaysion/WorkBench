@@ -15,10 +15,9 @@ export default function SettingsPage() {
   const resetToSeed = useStore((s) => s.resetToSeed)
   const showToast = useStore((s) => s.showToast)
   const counts = {
-    n: useStore((s) => s.notes.length),
     c: useStore((s) => s.commands.length),
     r: useStore((s) => s.runbooks.length),
-    t: useStore((s) => s.tasks.length),
+    b: useStore((s) => s.boards.length),
   }
   const [name, setName] = useState(settings.userName)
   const [mode, setMode] = useState<'merge' | 'replace'>('merge')
@@ -79,7 +78,7 @@ export default function SettingsPage() {
         <div className="panel form-col">
           <h4>💾 백업 · 가져오기</h4>
           <div className="small muted">
-            현재 데이터: 노트 {counts.n} · 명령 {counts.c} · 런북 {counts.r} · 업무 {counts.t}
+            현재 데이터: 작업대 {counts.b} · 명령 {counts.c} · 런북 {counts.r}
             <br />
             마지막 백업: {settings.lastBackupAt ? `${fmtDate(settings.lastBackupAt)} (${relTime(settings.lastBackupAt)})` : '없음'}
           </div>
