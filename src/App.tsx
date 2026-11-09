@@ -10,6 +10,7 @@ import Commands from './pages/Commands'
 import Runbooks from './pages/Runbooks'
 import Toolbox from './pages/Toolbox'
 import SettingsPage from './pages/Settings'
+import BoardEditPage from './pages/BoardEdit'
 
 export default function App() {
   const ready = useStore((s) => s.ready)
@@ -44,6 +45,8 @@ export default function App() {
           <Route path="runbooks/:id" element={<Runbooks />} />
           <Route path="toolbox" element={<Toolbox />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="settings/board" element={<BoardEditPage />} />
+          <Route path="settings/board/:id" element={<BoardEditPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

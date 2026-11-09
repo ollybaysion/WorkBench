@@ -6,6 +6,7 @@ import { AKG_TOKEN_RE, akgTokenPage, checkAkg, normalizeAkgUrl } from '../lib/ak
 import type { AkgCheck } from '../lib/akg'
 import Topbar from '../components/Topbar'
 import { exportBackup } from '../components/backup'
+import SettingsTabs from '../components/SettingsTabs'
 
 export default function SettingsPage() {
   const settings = useStore((s) => s.settings)
@@ -46,6 +47,7 @@ export default function SettingsPage() {
   return (
     <>
       <Topbar title="설정" />
+      <SettingsTabs />
       <div className="grid g2">
         <div className="panel form-col">
           <h4>👤 사용자</h4>
