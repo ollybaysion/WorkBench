@@ -140,6 +140,10 @@ export default function CardForm({ card, isNew, size, boardVars, boardConns, onS
     commands.map((c) => c.id),
   )
   const binds = d.kind === 'query' ? extractBinds(d.sql) : []
+  // 미리보기 그래프는 지금 고친 그래프 열로 바로 다시 그린다
+  const series = d.series.trim()
+  const previewView: CardView | undefined =
+    d.view === 'chart' ? { kind: 'chart', type: d.chartType, x: d.x.trim(), y: splitCols(d.y), ...(series ? { series } : {}) } : undefined
   const cmd = d.kind === 'command' ? commands.find((c) => c.id === d.commandId) : undefined
   const envName = (envId: string) => envs.find((e) => e.id === envId)?.name ?? envId
   const previewConn = d.kind === 'query' ? resolveConn(d.connection, { conns: boardConns }, connections, envs) : undefined
@@ -351,8 +355,8 @@ export default function CardForm({ card, isNew, size, boardVars, boardConns, onS
           </span>
           {preview && (
             <>
-              <div className="cf-preview">
-                <QueryBody run={preview} compact />
+              <div className={'cf-preview' + (d.view === 'chart' ? ' chart' : '')}>
+                <QueryBody run={preview} compact view={previewView} />
               </div>
               <div className="qc-foot">
                 <QueryFoot run={preview} />

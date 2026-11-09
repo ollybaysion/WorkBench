@@ -1,0 +1,296 @@
+import type { Cell, ChartType, QueryResult } from '../types'
+
+/** 카드의 그래프 설정(CardView 의 chart 쪽) */
+export interface ChartSpec {
+  type: ChartType
+  x: string
+  y: string[]
+  series?: string
+}
+
+/** 색 칸 수. 범주 색은 정해진 순서로만 쓰고, 넘치면 그리지 않고 알린다 */
+export const SLOTS = 8
+
+export type XKind = 'time' | 'num' | 'cat'
+export interface Series {
+  name: string
+  slot: number // 0 부터. 처음 나온 순서로 정해서, 거르거나 접어도 색이 바뀌지 않는다
+  values: (number | null)[]
+}
+export interface XY {
+  xKind: XKind
+  xs: number[] // time 은 unix 초, cat 은 0..n-1
+  labels: string[] // x 마다 보일 글자
+  series: Series[]
+}
+export interface Panel {
+  title?: string
+  data: XY
+}
+export interface HeatCell {
+  xi: number
+  yi: number
+  v: number
+}
+export interface BoxGroup {
+  name: string
+  n: number
+  lo: number
+  q1: number
+  med: number
+  q3: number
+  hi: number
+  outliers: number[]
+}
+
+export type Prepared =
+  | { kind: 'lines'; type: 'line' | 'step' | 'area' | 'scatter'; panels: Panel[]; note?: string }
+  | { kind: 'bars'; stacked: boolean; data: XY; yName: string; note?: string }
+  | { kind: 'heatmap'; xs: string[]; ys: string[]; cells: HeatCell[]; min: number; max: number; xName: string; yName: string; vName: string }
+  | { kind: 'box'; groups: BoxGroup[]; xName: string; yName: string; note?: string }
+  | { kind: 'error'; message: string }
+
+const fail = (message: string): Prepared => ({ kind: 'error', message })
+
+export function toNum(v: Cell): number | null {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null
+  if (typeof v === 'string' && v.trim() !== '') {
+    const n = Number(v)
+    return Number.isFinite(n) ? n : null
+  }
+  return null
+}
+
+const DT_RE = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?$/
+const TIME_RE = /^(\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?$/
+
+/** 날짜 · 시각 글자를 unix 초로. 시각만 있으면 오늘 날짜로 본다 */
+export function parseTime(v: Cell): number | null {
+  if (typeof v !== 'string') return null
+  const s = v.trim()
+  let m = DT_RE.exec(s)
+  if (m) return new Date(+m[1], +m[2] - 1, +m[3], +(m[4] ?? 0), +(m[5] ?? 0), +(m[6] ?? 0)).getTime() / 1000
+  m = TIME_RE.exec(s)
+  if (m) {
+    const d = new Date()
+    d.setHours(+m[1], +m[2], +(m[3] ?? 0), 0)
+    return d.getTime() / 1000
+  }
+  return null
+}
+
+const label = (v: Cell) => (v === null ? 'NULL' : String(v))
+
+function colIndex(result: QueryResult, name: string): number {
+  const want = name.trim().toLowerCase()
+  return result.columns.findIndex((c) => c.name.toLowerCase() === want)
+}
+
+function lookup(result: QueryResult, names: string[]): number[] | string {
+  const idx = names.map((n) => colIndex(result, n))
+  const missing = names.filter((_, i) => idx[i] < 0)
+  if (missing.length) return `결과에 열 ${missing.join(', ')} 이 없습니다. 있는 열: ${result.columns.map((c) => c.name).join(', ')}`
+  return idx
+}
+
+/** x 열의 모양: 숫자 열이면 num, 모든 값이 날짜 · 시각이면 time, 아니면 cat */
+function xKindOf(result: QueryResult, xi: number): XKind {
+  if (result.columns[xi].type === 'number') return 'num'
+  const vals = result.rows.map((r) => r[xi]).filter((v) => v !== null)
+  if (vals.length && vals.every((v) => parseTime(v) !== null)) return 'time'
+  if (vals.length && vals.every((v) => toNum(v) !== null)) return 'num'
+  return 'cat'
+}
+
+/**
+ * 행을 x 하나에 값 여럿인 모양으로 모은다.
+ * 시리즈 열이 있으면 그 값마다 시리즈 하나(y 가 여럿이면 "시리즈 · y"), 없으면 y 열마다 시리즈 하나.
+ */
+function collect(result: QueryResult, xi: number, yi: number[], si: number, xKind: XKind): { xs: number[]; labels: string[]; series: Series[]; groups: string[] } {
+  const keyOf = (v: Cell) => (xKind === 'time' ? parseTime(v) : xKind === 'num' ? toNum(v) : label(v))
+  const order: (string | number)[] = []
+  const seenX = new Map<string | number, string>()
+  const names: string[] = []
+  const groups: string[] = []
+  const cells = new Map<string, Map<string | number, number | null>>()
+  for (const row of result.rows) {
+    const k = keyOf(row[xi])
+    if (k === null) continue
+    if (!seenX.has(k)) {
+      seenX.set(k, label(row[xi]))
+      order.push(k)
+    }
+    const g = si >= 0 ? label(row[si]) : ''
+    if (si >= 0 && !groups.includes(g)) groups.push(g)
+    yi.forEach((y) => {
+      const name = si < 0 ? result.columns[y].name : yi.length > 1 ? `${g} · ${result.columns[y].name}` : g
+      if (!cells.has(name)) {
+        cells.set(name, new Map())
+        names.push(name)
+      }
+      cells.get(name)!.set(k, toNum(row[y]))
+    })
+  }
+  if (xKind !== 'cat') order.sort((a, b) => (a as number) - (b as number))
+  const xs = xKind === 'cat' ? order.map((_, i) => i) : (order as number[])
+  const series = names.map((name, slot) => ({ name, slot, values: order.map((k) => cells.get(name)!.get(k) ?? null) }))
+  return { xs, labels: order.map((k) => seenX.get(k)!), series, groups }
+}
+
+const capNote = (n: number) => (n > SLOTS ? `시리즈 ${n} 개 중 앞 ${SLOTS} 개만 그립니다. 표에서 모두 봅니다.` : undefined)
+
+function quantile(sorted: number[], p: number): number {
+  const i = (sorted.length - 1) * p
+  const lo = Math.floor(i)
+  const hi = Math.ceil(i)
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo)
+}
+
+export function prepare(result: QueryResult, spec: ChartSpec): Prepared {
+  if (!spec.x.trim()) return fail('그래프의 x 열을 정하세요')
+  if (spec.y.length === 0) return fail('그래프의 y 열을 정하세요')
+  const found = lookup(result, [spec.x, ...spec.y, ...(spec.series ? [spec.series] : [])])
+  if (typeof found === 'string') return fail(found)
+  const [xi, ...rest] = found
+  const yi = rest.slice(0, spec.y.length)
+  const si = spec.series ? rest[spec.y.length] : -1
+
+  switch (spec.type) {
+    case 'line':
+    case 'step':
+    case 'area':
+    case 'scatter': {
+      const xKind = xKindOf(result, xi)
+      const all = collect(result, xi, yi, si, xKind)
+      // 시리즈가 넷 이하면 위아래로 나눠 그린다(축 하나에 단위가 다른 값을 겹치지 않는다)
+      if (si >= 0 && all.groups.length > 1 && all.groups.length <= 4) {
+        const panels = all.groups.map((g, gi) => {
+          const series = all.series.filter((s) => (yi.length > 1 ? s.name.startsWith(`${g} · `) : s.name === g)).map((s) => ({ ...s, slot: gi }))
+          return { title: g, data: { xKind, xs: all.xs, labels: all.labels, series } }
+        })
+        return { kind: 'lines', type: spec.type, panels }
+      }
+      return { kind: 'lines', type: spec.type, panels: [{ data: { xKind, xs: all.xs, labels: all.labels, series: all.series.slice(0, SLOTS) } }], note: capNote(all.series.length) }
+    }
+    case 'bar':
+    case 'stacked-bar': {
+      const all = collect(result, xi, yi, si, 'cat')
+      return {
+        kind: 'bars',
+        stacked: spec.type === 'stacked-bar',
+        data: { xKind: 'cat', xs: all.xs, labels: all.labels, series: all.series.slice(0, SLOTS) },
+        yName: yi.map((y) => result.columns[y].name).join(', '),
+        note: capNote(all.series.length),
+      }
+    }
+    case 'histogram': {
+      // y 첫 열의 값을 구간으로 나눠 센다. 구간 수는 √n (5~30)
+      const vals = result.rows.map((r) => toNum(r[yi[0]])).filter((v): v is number => v !== null)
+      if (vals.length === 0) return fail(`${spec.y[0]} 열에 숫자가 없습니다`)
+      const min = Math.min(...vals)
+      const max = Math.max(...vals)
+      const bins = Math.min(30, Math.max(5, Math.round(Math.sqrt(vals.length))))
+      const width = max > min ? (max - min) / bins : 1
+      const counts = new Array<number>(bins).fill(0)
+      for (const v of vals) counts[Math.min(bins - 1, Math.floor((v - min) / width))]++
+      const fmt = (n: number) => String(Math.round(n * 1000) / 1000)
+      const labels = counts.map((_, i) => `${fmt(min + i * width)}–${fmt(min + (i + 1) * width)}`)
+      return {
+        kind: 'bars',
+        stacked: false,
+        data: { xKind: 'cat', xs: counts.map((_, i) => i), labels, series: [{ name: `${result.columns[yi[0]].name} 개수`, slot: 0, values: counts }] },
+        yName: '개수',
+      }
+    }
+    case 'heatmap': {
+      // x · y 칸마다 값 하나. y 둘째 열이 값이고, 없으면 행 수를 센다
+      const yy = yi[0]
+      const vi = yi[1] ?? -1
+      const xKey = (v: Cell) => label(v)
+      const xs: string[] = []
+      const ys: string[] = []
+      const acc = new Map<string, number>()
+      for (const row of result.rows) {
+        const a = xKey(row[xi])
+        const b = xKey(row[yy])
+        if (!xs.includes(a)) xs.push(a)
+        if (!ys.includes(b)) ys.push(b)
+        const k = `${a}\u0000${b}`
+        const v = vi >= 0 ? toNum(row[vi]) : 1
+        if (v !== null) acc.set(k, (vi >= 0 ? 0 : (acc.get(k) ?? 0)) + v)
+      }
+      const numSort = (arr: string[]) => (arr.every((s) => toNum(s) !== null) ? arr.sort((p, q) => Number(p) - Number(q)) : arr)
+      numSort(xs)
+      numSort(ys)
+      const cells: HeatCell[] = []
+      for (const [k, v] of acc) {
+        const [a, b] = k.split('\u0000')
+        cells.push({ xi: xs.indexOf(a), yi: ys.indexOf(b), v })
+      }
+      if (cells.length === 0) return fail('그릴 칸이 없습니다')
+      const vs = cells.map((c) => c.v)
+      return {
+        kind: 'heatmap',
+        xs,
+        ys,
+        cells,
+        min: Math.min(...vs),
+        max: Math.max(...vs),
+        xName: result.columns[xi].name,
+        yName: result.columns[yy].name,
+        vName: vi >= 0 ? result.columns[vi].name : '행 수',
+      }
+    }
+    case 'box': {
+      // x 값마다 y 첫 열의 분포: 사분위 · 1.5 IQR 수염 · 바깥 점
+      const by = new Map<string, number[]>()
+      for (const row of result.rows) {
+        const v = toNum(row[yi[0]])
+        if (v === null) continue
+        const g = label(row[xi])
+        if (!by.has(g)) by.set(g, [])
+        by.get(g)!.push(v)
+      }
+      if (by.size === 0) return fail(`${spec.y[0]} 열에 숫자가 없습니다`)
+      const groups = [...by].slice(0, 40).map(([name, raw]) => {
+        const s = [...raw].sort((a, b) => a - b)
+        const q1 = quantile(s, 0.25)
+        const q3 = quantile(s, 0.75)
+        const fence = 1.5 * (q3 - q1)
+        const inside = s.filter((v) => v >= q1 - fence && v <= q3 + fence)
+        return { name, n: s.length, q1, med: quantile(s, 0.5), q3, lo: inside[0] ?? q1, hi: inside[inside.length - 1] ?? q3, outliers: s.filter((v) => v < q1 - fence || v > q3 + fence) }
+      })
+      return {
+        kind: 'box',
+        groups,
+        xName: result.columns[xi].name,
+        yName: result.columns[yi[0]].name,
+        note: by.size > 40 ? `묶음 ${by.size} 개 중 앞 40 개만 그립니다` : undefined,
+      }
+    }
+  }
+}
+
+/** 0 을 포함하는 보기 좋은 눈금 */
+export function niceTicks(min: number, max: number, count = 4): number[] {
+  if (!(max > min)) return [min]
+  const raw = (max - min) / count
+  const mag = 10 ** Math.floor(Math.log10(raw))
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? raw
+  const out: number[] = []
+  for (let v = Math.ceil(min / step) * step; v <= max + step * 1e-9; v += step) out.push(Math.round(v / step) * step)
+  return out
+}
+
+export function fmtNum(v: number): string {
+  const a = Math.abs(v)
+  if (a >= 1e6) return `${Math.round(v / 1e5) / 10}M`
+  if (a >= 1e4) return `${Math.round(v / 100) / 10}k`
+  if (a >= 100) return String(Math.round(v))
+  return String(Math.round(v * 1000) / 1000)
+}
+
+/** 툴팁 값: 축 눈금과 달리 반올림하지 않는다(소수 넷째 자리까지) */
+export function fmtVal(v: number): string {
+  return Math.abs(v) >= 1e6 ? v.toExponential(3) : String(Math.round(v * 1e4) / 1e4)
+}
