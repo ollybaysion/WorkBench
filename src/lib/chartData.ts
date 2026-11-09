@@ -11,6 +11,7 @@ export interface ChartSpec {
   series?: string
   focus?: string
   phase?: string
+  band?: string
 }
 
 /** 그래프 밖에서 오는 값: 카드의 한계 열, 겹침 모드가 고를 시리즈 이름(focus 변수의 지금 값) */
@@ -36,6 +37,8 @@ export interface LineExtras {
   lcl?: (number | null)[]
   ucl?: (number | null)[]
   phases?: { from: number; to: number; name: string }[]
+  /** 강조 구간: band 열 값이 있는 x 가 이어진 구간 */
+  bands?: { from: number; to: number; name: string }[]
   over?: { from: number; to: number }[]
   /** 가장 많이 넘은 점. width 는 넘은 x 폭의 합(x 간격 × 넘은 점 수) */
   peak?: { x: number; v: number; limit: number; side: 'ucl' | 'lcl'; width: number }
@@ -104,20 +107,23 @@ export type Prepared =
 
 const fail = (message: string): Prepared => ({ kind: 'error', message })
 
-const DT_RE = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?$/
-const TIME_RE = /^(\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?$/
+const DT_RE = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2})(\.\d+)?)?)?$/
+const TIME_RE = /^(\d{1,2}):(\d{2})(?::(\d{2})(\.\d+)?)?$/
 
-/** 날짜 · 시각 글자를 unix 초로. 시각만 있으면 오늘 날짜로 본다 */
+/** 초 아래 자리(".137")를 초로. trace 는 ms 단위로 보므로 버리지 않는다 */
+const frac = (f: string | undefined) => (f ? Number(f) : 0)
+
+/** 날짜 · 시각 글자를 unix 초로(소수 초 포함). 시각만 있으면 오늘 날짜로 본다 */
 export function parseTime(v: Cell): number | null {
   if (typeof v !== 'string') return null
   const s = v.trim()
   let m = DT_RE.exec(s)
-  if (m) return new Date(+m[1], +m[2] - 1, +m[3], +(m[4] ?? 0), +(m[5] ?? 0), +(m[6] ?? 0)).getTime() / 1000
+  if (m) return new Date(+m[1], +m[2] - 1, +m[3], +(m[4] ?? 0), +(m[5] ?? 0), +(m[6] ?? 0)).getTime() / 1000 + frac(m[7])
   m = TIME_RE.exec(s)
   if (m) {
     const d = new Date()
     d.setHours(+m[1], +m[2], +(m[3] ?? 0), 0)
-    return d.getTime() / 1000
+    return d.getTime() / 1000 + frac(m[4])
   }
   return null
 }
@@ -194,6 +200,23 @@ function perX<T>(result: QueryResult, xi: number, ci: number, xKind: XKind, keys
   return keys.map((k) => m.get(k) ?? null)
 }
 
+/** x 마다 이름 → 같은 이름이 이어진 구간. breakOnGap 이면 이름 없는 x 에서 끊는다(강조 구간) */
+function runsOf(names: (string | null)[], xs: number[], breakOnGap: boolean): { from: number; to: number; name: string }[] {
+  const runs: { from: number; to: number; name: string }[] = []
+  let prev: string | null = null
+  names.forEach((n, i) => {
+    if (n === null) {
+      if (breakOnGap) prev = null
+      return
+    }
+    const last = runs[runs.length - 1]
+    if (last && last.name === n && prev === n) last.to = xs[i]
+    else runs.push({ from: xs[i], to: xs[i], name: n })
+    prev = n
+  })
+  return runs
+}
+
 /**
  * 선 그래프에 얹는 것을 만든다. 한계 열은 행마다 읽어서 x 마다 한 값으로(STEP 마다 한계가 달라도 된다).
  * 넘은 구간 · 가장 많이 넘은 점은 targets(겹침 모드면 고른 시리즈, 아니면 그린 시리즈 모두)로 본다.
@@ -206,15 +229,13 @@ function lineExtras(result: QueryResult, xi: number, xKind: XKind, xs: number[],
   if (lc.ucl >= 0) out.ucl = perX(result, xi, lc.ucl, xKind, keys, toNum)
   const pi = colIndex(result, spec.phase)
   if (pi >= 0) {
-    const names = perX(result, xi, pi, xKind, keys, (v) => (v === null ? null : label(v)))
-    const phases: NonNullable<LineExtras['phases']> = []
-    names.forEach((n, i) => {
-      if (n === null) return
-      const last = phases[phases.length - 1]
-      if (last && last.name === n) last.to = xs[i]
-      else phases.push({ from: xs[i], to: xs[i], name: n })
-    })
+    const phases = runsOf(perX(result, xi, pi, xKind, keys, (v) => (v === null ? null : label(v))), xs, false)
     if (phases.length) out.phases = phases
+  }
+  const bi = colIndex(result, spec.band)
+  if (bi >= 0) {
+    const bands = runsOf(perX(result, xi, bi, xKind, keys, (v) => (v === null || String(v).trim() === '' ? null : label(v))), xs, true)
+    if (bands.length) out.bands = bands
   }
   if (out.lcl || out.ucl) {
     const step = xs.length > 1 ? (xs[xs.length - 1] - xs[0]) / (xs.length - 1) : 1

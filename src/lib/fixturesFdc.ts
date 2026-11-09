@@ -3,14 +3,14 @@ import type { Cell, Column, QueryResult } from '../types'
 // FDC 확인 작업판의 가짜 결과 — mockups/fdc/index.html · mockups/stat/many.html 의 값을 옮겼다.
 // 변수(lot_id · wafer · param · step)에 따라 결과가 바뀐다. 같은 변수면 같은 결과(시드 고정).
 
-type Vars = Record<string, string>
+export type Vars = Record<string, string>
 export type FdcFixture = { delayMs: number; result: QueryResult }
 
-const col = (name: string, type: Column['type'] = 'string'): Column => ({ name, type })
-const ok = (delayMs: number, columns: Column[], rows: Cell[][]): FdcFixture => ({ delayMs, result: { columns, rows, truncated: false, elapsedMs: delayMs } })
+export const col = (name: string, type: Column['type'] = 'string'): Column => ({ name, type })
+export const ok = (delayMs: number, columns: Column[], rows: Cell[][]): FdcFixture => ({ delayMs, result: { columns, rows, truncated: false, elapsedMs: delayMs } })
 
 /** 파라미터(SVID): 이름 · 묶음 · 평소 값 · 단위 · LCL · UCL · 소수 자리 */
-interface Param {
+export interface Param {
   name: string
   group: string
   nominal: number
@@ -67,7 +67,7 @@ function hash(s: string): number {
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619)
   return h >>> 0
 }
-function rng(seed: string) {
+export function rng(seed: string) {
   let s = hash(seed) % 2147483647 || 1
   return () => (s = (s * 48271) % 2147483647) / 2147483647
 }
