@@ -365,8 +365,9 @@ pre.code { background: var(--code-bg); color: var(--code-text); padding: 12px 14
 .tbox { border: 1px solid var(--border); border-radius: 8px; overflow: auto; background: var(--surface); }
 
 /* 서랍 */
-.drawer-bg { position: fixed; inset: 0; background: rgba(0, 0, 0, .3); z-index: 90; }
-.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(680px, 100vw); background: var(--surface); border-left: 1px solid var(--border); box-shadow: var(--shadow); z-index: 95; display: flex; flex-direction: column; }
+.drawer { position: fixed; inset: 0; background: var(--surface); z-index: 95; display: flex; flex-direction: column; animation: cardGrow .18s ease-out; }
+@keyframes cardGrow { from { opacity: 0; transform: scale(.5); } }
+@media (prefers-reduced-motion: reduce) { .drawer { animation: none; } }
 .drawer-head { display: flex; align-items: center; gap: 10px; padding: 0 16px; height: 52px; border-bottom: 1px solid var(--border); flex: none; min-width: 0; }
 .drawer-head h3 { font-size: 18px; margin-right: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .drawer-body { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
@@ -489,7 +490,7 @@ pre.code { background: var(--code-bg); color: var(--code-text); padding: 12px 14
 .qc-seg button { border: 0; background: var(--surface); color: var(--muted); font-size: 12px; line-height: 1; padding: 2px 6px; cursor: pointer; }
 .qc-seg button + button { border-left: 1px solid var(--border); }
 .qc-seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
-.drawer-chart { height: 270px; flex: none; }
+.drawer-chart { height: clamp(270px, 45vh, 560px); flex: none; }
 /* 숫자 타일(Grafana Stat 패널 참고) */
 .stat-grid { display: grid; width: 100%; height: 100%; }
 .stat { min-width: 0; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); font: inherit; text-align: left; cursor: copy; overflow: hidden; }

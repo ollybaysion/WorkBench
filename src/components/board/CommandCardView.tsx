@@ -41,8 +41,8 @@ export default function CommandCardView({ card, boardVars, checks: checksProp, o
         <button
           type="button"
           className="qc-xp"
-          title="자세히"
-          aria-label="자세히"
+          title="크게 보기"
+          aria-label="크게 보기"
           onClick={(e) => {
             e.stopPropagation()
             onOpen()
