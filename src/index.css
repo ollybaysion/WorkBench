@@ -402,6 +402,22 @@ pre.code { background: var(--code-bg); color: var(--code-text); padding: 12px 14
 .tres.bad { background: var(--danger-soft); color: var(--danger); }
 .chip.warn { background: var(--warn-soft); color: var(--warn); }
 .cband .fake { margin-left: auto; text-decoration: none; }
+.alias-list { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.arow { display: grid; grid-template-columns: minmax(180px, 1.2fr) minmax(220px, 1.4fr) 70px minmax(200px, 1.4fr); gap: 12px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--border); background: var(--surface); font-size: 13px; }
+.arow:first-child { border-top: 0; }
+.arow.head { background: var(--surface-2); font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--muted); padding: 6px 12px; }
+.arow:not(.named):not(.head):not(.other) .alias-cell code { color: var(--muted); }
+.alias-cell { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.alias-cell code { font-size: 13px; font-weight: 600; }
+.alias-name { display: flex; gap: 6px; align-items: center; min-width: 0; margin: 0; }
+.alias-name .input { flex: 1; min-width: 0; padding: 4px 8px; }
+.alias-test { display: flex; gap: 8px; align-items: center; min-width: 0; flex-wrap: wrap; }
+.alias-test .tres { flex: 1 1 120px; }
+.qc-conn.fake { color: var(--warn); }
+@media (max-width: 900px) {
+  .arow { grid-template-columns: minmax(0, 1fr); }
+  .arow.head { display: none; }
+}
 .conn-str { font-size: 12px; padding: 6px 9px; border-radius: 7px; background: var(--surface-2); color: var(--text); overflow-wrap: anywhere; }
 @media (max-width: 760px) {
   .conn-grid { grid-template-columns: minmax(0, 1fr); }

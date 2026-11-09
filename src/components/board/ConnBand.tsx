@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import type { Connection } from '../../types'
 import { useStore } from '../../store'
-import { connsNamed } from '../../lib/conn'
+import { connLabel, connsNamed } from '../../lib/conn'
 
 interface Props {
   names: string[]
@@ -14,7 +14,6 @@ export default function ConnBand({ names, connOf, onPick }: Props) {
   const connections = useStore((s) => s.connections)
   const envs = useStore((s) => s.envs)
   if (names.length === 0) return null
-  const envName = (id: string) => envs.find((e) => e.id === id)?.name ?? id
   return (
     <div className="vband cband">
       <span className="lbl">연결</span>
@@ -22,13 +21,13 @@ export default function ConnBand({ names, connOf, onPick }: Props) {
         const cur = connOf(name)
         const opts = connsNamed(name, connections, envs)
         return (
-          <label key={name} className={'vpill' + (cur ? '' : ' empty')} title={cur ? `${cur.host}:${cur.port}/${cur.service} · ${cur.user}` : undefined}>
+          <label key={name} className={'vpill' + (cur ? '' : ' empty')} title={cur?.alias ? `agent-db ${cur.alias} 로 조회` : '가짜 결과'}>
             <span className="k">⛁ {name || '(이름 없음)'}</span>
             {opts.length ? (
               <select value={cur?.id ?? ''} onChange={(e) => onPick(name, e.target.value)} aria-label={`${name} 연결`}>
                 {opts.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {envName(c.envId)} · {c.alias ? `agent-db ${c.alias}` : `${c.host || '-'} (가짜 결과)`}
+                    {connLabel(c, envs)}
                   </option>
                 ))}
               </select>

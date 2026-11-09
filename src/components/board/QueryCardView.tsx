@@ -3,18 +3,19 @@ import type { Connection, QueryCard } from '../../types'
 import type { QueryState } from '../../lib/runner'
 import { fmtSec } from '../../lib/util'
 import { useStore } from '../../store'
+import { connLabel } from '../../lib/conn'
 import ResultTable, { ROW_H_COMPACT } from './ResultTable'
 import Chart from '../chart/Chart'
 import type { CardView } from '../../types'
 
 /** 연결 태그 `FDC-L1 · production`. 좁은 카드에서는 환경 이름을 숨긴다(index.css 컨테이너 쿼리) */
 export function ConnTag({ conn, name }: { conn?: Connection; name: string }) {
-  const env = useStore((s) => s.envs.find((e) => e.id === conn?.envId))
+  const envs = useStore((s) => s.envs)
   if (!conn) return <span className="qc-conn err">⛁ {name || '연결'} 없음</span>
   return (
-    <span className="qc-conn" title={`${conn.host}:${conn.port}/${conn.service} · ${conn.user}`}>
+    <span className={'qc-conn' + (conn.alias ? '' : ' fake')} title={conn.alias ? `agent-db ${conn.alias} 로 조회` : '가짜 결과'}>
       ⛁ {conn.name}
-      <span className="env"> · {env?.name ?? conn.envId}</span>
+      <span className="env"> · {connLabel(conn, envs)}</span>
     </span>
   )
 }
