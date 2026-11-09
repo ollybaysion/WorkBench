@@ -324,6 +324,9 @@ pre.code { background: var(--code-bg); color: var(--code-text); padding: 12px 14
   .qc-conn .env, .qc-status { display: none; }
   .qc-foot.cfoot .uses { display: none; }
 }
+@container (max-width: 300px) {
+  .qcard .qc-head .qc-conn { display: none; } /* 1×1 카드는 제목이 먼저. 연결은 연결 띠 · 서랍에서 본다 */
+}
 .qcard { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; overflow: hidden; cursor: pointer; }
 .qcard:hover { border-color: var(--accent); }
 .qcard.sel { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
@@ -484,6 +487,22 @@ pre.code { background: var(--code-bg); color: var(--code-text); padding: 12px 14
 .qc-seg button + button { border-left: 1px solid var(--border); }
 .qc-seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
 .drawer-chart { height: 270px; flex: none; }
+/* 숫자 타일(Grafana Stat 패널 참고) */
+.stat-grid { display: grid; width: 100%; height: 100%; }
+.stat { min-width: 0; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); font: inherit; text-align: left; cursor: copy; overflow: hidden; }
+.stat:hover { border-color: var(--accent); }
+.stat:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.stat-l { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-v { font-weight: 600; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.01em; }
+.stat-d { font-size: 11px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-d em { font-style: normal; color: var(--muted); }
+.stat-spark { display: block; margin-top: 2px; }
+.qc-status.idle { color: var(--muted); font-style: italic; }
+.qc-state.idle { flex-direction: column; gap: 6px; }
+.qc-run { color: var(--accent); }
+.qc-run:disabled { opacity: .4; cursor: default; }
+.qc-stale { border: 0; background: var(--warn-soft); color: var(--warn); border-radius: 6px; padding: 1px 8px; font: inherit; font-size: 11px; cursor: pointer; }
+.qc-stale:hover { filter: brightness(.97); }
 .board-rename { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0; }
 .board-rename .input { width: min(320px, 60vw); }
 .board-rename .input[aria-invalid="true"] { border-color: var(--danger); }

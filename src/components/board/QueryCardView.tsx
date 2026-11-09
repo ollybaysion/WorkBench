@@ -22,7 +22,8 @@ export function ConnTag({ conn, name }: { conn?: Connection; name: string }) {
 }
 
 export function QueryStatus({ run }: { run?: QueryState }) {
-  if (!run || run.status === 'loading') return <span className="qc-status">조회 중…</span>
+  if (!run) return <span className="qc-status idle">조회 전</span>
+  if (run.status === 'loading') return <span className="qc-status">조회 중…</span>
   if (run.status === 'error') return <span className="qc-status err">오류</span>
   return <span className="qc-status">{fmtSec(run.result.elapsedMs)}</span>
 }
@@ -59,8 +60,27 @@ export function ModeSeg({ mode, chart, onMode, chartType }: { mode: ResultMode; 
 }
 
 /** 상태 셋: 조회 중 · 0 행 · 오류. 그 외에는 표, 그래프 보기면 그래프, 행 카드 보기면 행 카드 */
-export function QueryBody({ run, compact, maxRows, view, records }: { run?: QueryState; compact?: boolean; maxRows?: number; view?: CardView; records?: boolean }) {
-  if (!run || run.status === 'loading') return <div className="qc-state">조회 중…</div>
+export function QueryBody({ run, compact, maxRows, view, records, onRun }: { run?: QueryState; compact?: boolean; maxRows?: number; view?: CardView; records?: boolean; onRun?: () => void }) {
+  if (!run)
+    return (
+      <div className="qc-state idle">
+        {onRun ? (
+          <button
+            type="button"
+            className="btn small primary"
+            onClick={(e) => {
+              e.stopPropagation()
+              onRun()
+            }}
+          >
+            ▶ 조회
+          </button>
+        ) : (
+          '조회 전'
+        )}
+      </div>
+    )
+  if (run.status === 'loading') return <div className="qc-state">조회 중…</div>
   if (run.status === 'error')
     return (
       <div className="qc-state">
@@ -74,7 +94,8 @@ export function QueryBody({ run, compact, maxRows, view, records }: { run?: Quer
 }
 
 export function QueryFoot({ run }: { run?: QueryState }) {
-  if (!run || run.status === 'loading') return <span>조회 중…</span>
+  if (!run) return <span>조회 전 · ▶ 를 누르면 조회합니다</span>
+  if (run.status === 'loading') return <span>조회 중…</span>
   if (run.status === 'error') return <span className="err">오류</span>
   return (
     <>
@@ -90,7 +111,7 @@ export function QueryFoot({ run }: { run?: QueryState }) {
   )
 }
 
-export default function QueryCardView({ card, conn, run, selected, onOpen }: { card: QueryCard; conn?: Connection; run?: QueryState; selected: boolean; onOpen: () => void }) {
+export default function QueryCardView({ card, conn, run, stale, selected, onOpen, onRun }: { card: QueryCard; conn?: Connection; run?: QueryState; stale: boolean; selected: boolean; onOpen: () => void; onRun: () => void }) {
   const bodyRef = useRef<HTMLDivElement>(null)
   // 표는 들어가는 만큼만: 몸통 높이에서 머리 행을 빼고 행 높이로 나눈다
   const [maxRows, setMaxRows] = useState<number>()
@@ -116,6 +137,19 @@ export default function QueryCardView({ card, conn, run, selected, onOpen }: { c
         <QueryStatus run={run} />
         <button
           type="button"
+          className="qc-xp qc-run"
+          title={run ? '다시 조회' : '조회'}
+          aria-label={run ? '다시 조회' : '조회'}
+          disabled={run?.status === 'loading'}
+          onClick={(e) => {
+            e.stopPropagation()
+            onRun()
+          }}
+        >
+          ▶
+        </button>
+        <button
+          type="button"
           className="qc-xp"
           title="자세히"
           aria-label="자세히"
@@ -128,10 +162,24 @@ export default function QueryCardView({ card, conn, run, selected, onOpen }: { c
         </button>
       </div>
       <div className={'qc-body' + (mode === 'records' ? ' records' : '')} ref={bodyRef}>
-        <QueryBody run={run} compact maxRows={maxRows} view={mode === 'chart' ? card.view : undefined} records={mode === 'records'} />
+        <QueryBody run={run} compact maxRows={maxRows} view={mode === 'chart' ? card.view : undefined} records={mode === 'records'} onRun={onRun} />
       </div>
       <div className="qc-foot">
-        <QueryFoot run={run} />
+        {stale ? (
+          <button
+            type="button"
+            className="qc-stale"
+            title="조회한 뒤 변수 · alias · SQL 이 바뀌었습니다"
+            onClick={(e) => {
+              e.stopPropagation()
+              onRun()
+            }}
+          >
+            ⟳ 변수가 바뀜 · 다시 조회
+          </button>
+        ) : (
+          <QueryFoot run={run} />
+        )}
       </div>
     </article>
   )

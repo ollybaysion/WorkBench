@@ -43,11 +43,24 @@ export interface BoxGroup {
   outliers: number[]
 }
 
+/** 숫자 타일 하나. 시간 열이면 spark(추세) · delta(마지막 − 처음) · from(처음 x 글자)이 붙는다 */
+export interface StatTile {
+  label: string
+  value: number | null
+  spark?: (number | null)[]
+  delta?: number
+  from?: string
+}
+
+/** 숫자 타일은 많아야 이만큼(넘치면 알린다) */
+export const STAT_MAX = 24
+
 export type Prepared =
   | { kind: 'lines'; type: 'line' | 'step' | 'area' | 'scatter'; panels: Panel[]; note?: string }
   | { kind: 'bars'; stacked: boolean; data: XY; yName: string; note?: string }
   | { kind: 'heatmap'; xs: string[]; ys: string[]; cells: HeatCell[]; min: number; max: number; xName: string; yName: string; vName: string }
   | { kind: 'box'; groups: BoxGroup[]; xName: string; yName: string; note?: string }
+  | { kind: 'stat'; tiles: StatTile[]; note?: string }
   | { kind: 'error'; message: string }
 
 const fail = (message: string): Prepared => ({ kind: 'error', message })
@@ -240,6 +253,30 @@ export function prepare(result: QueryResult, spec: ChartSpec): Prepared {
         yName: result.columns[yy].name,
         vName: vi >= 0 ? result.columns[vi].name : '행 수',
       }
+    }
+    case 'stat': {
+      const xKind = xKindOf(result, xi)
+      if (xKind === 'time') {
+        // 시간 열: y(시리즈가 있으면 시리즈 값)마다 타일 하나. 큰 숫자는 마지막 값
+        const all = collect(result, xi, yi, si, 'time')
+        const tiles = all.series.slice(0, STAT_MAX).map((s) => {
+          const idx = s.values.map((v, i) => (v === null ? -1 : i)).filter((i) => i >= 0)
+          const first = idx[0]
+          const last = idx[idx.length - 1]
+          const value = last === undefined ? null : s.values[last]
+          return {
+            label: s.name,
+            value,
+            spark: s.values,
+            ...(idx.length > 1 && value !== null ? { delta: value - (s.values[first] as number), from: all.labels[first] } : {}),
+          }
+        })
+        return { kind: 'stat', tiles, note: all.series.length > STAT_MAX ? `타일 ${all.series.length} 개 중 앞 ${STAT_MAX} 개만 보입니다` : undefined }
+      }
+      // 이름 열: 행마다 타일. y 가 여럿이면 "이름 · y"
+      const tiles: StatTile[] = []
+      for (const row of result.rows) for (const y of yi) tiles.push({ label: yi.length > 1 ? `${label(row[xi])} · ${result.columns[y].name}` : label(row[xi]), value: toNum(row[y]) })
+      return { kind: 'stat', tiles: tiles.slice(0, STAT_MAX), note: tiles.length > STAT_MAX ? `타일 ${tiles.length} 개 중 앞 ${STAT_MAX} 개만 보입니다. 표에서 모두 봅니다.` : undefined }
     }
     case 'box': {
       // x 값마다 y 첫 열의 분포: 사분위 · 1.5 IQR 수염 · 바깥 점

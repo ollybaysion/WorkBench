@@ -60,7 +60,7 @@ export default function CardDrawer({ card, conn, run, boardVars, checks, onCheck
           </button>
         </div>
         {card.kind === 'query' ? (
-          <QueryDrawer card={card} run={run} boardVars={boardVars} connName={conn?.name} />
+          <QueryDrawer card={card} run={run} boardVars={boardVars} connName={conn?.name} onRerun={onRerun} />
         ) : (
           <CommandDrawer card={card} boardVars={boardVars} checks={checks} onChecks={onChecks} />
         )}
@@ -81,13 +81,14 @@ function highlightBinds(sql: string): ReactNode[] {
   return out
 }
 
-function QueryDrawer({ card, run, boardVars, connName }: { card: QueryCard; run?: QueryState; boardVars: Record<string, string>; connName?: string }) {
+function QueryDrawer({ card, run, boardVars, connName, onRerun }: { card: QueryCard; run?: QueryState; boardVars: Record<string, string>; connName?: string; onRerun: () => void }) {
   const binds = extractBinds(card.sql)
   const ok = run?.status === 'ok' ? run.result : undefined
   // 열이 많으면 행 카드로 먼저 연다
   const [mode, setMode] = useState<ResultMode>(() => (ok && ok.columns.length > 12 ? 'records' : 'table'))
   let foot: ReactNode
-  if (!run || run.status === 'loading') foot = <span>조회 중…</span>
+  if (!run) foot = <span>조회 전</span>
+  else if (run.status === 'loading') foot = <span>조회 중…</span>
   else if (run.status === 'error') foot = <span className="err">오류 · 마지막 조회 {fmtTime(run.at)}</span>
   else
     foot = (
@@ -135,7 +136,7 @@ function QueryDrawer({ card, run, boardVars, connName }: { card: QueryCard; run?
           )}
         </div>
         <div className={'tbox drawer-table' + (mode === 'records' ? ' records' : '')}>
-          <QueryBody run={run} records={mode === 'records'} />
+          <QueryBody run={run} records={mode === 'records'} onRun={onRerun} />
         </div>
         <details className="sqlbox" open>
           <summary>

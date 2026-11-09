@@ -99,7 +99,7 @@ export interface Connection extends Base {
   alias?: string
 } // 비밀번호는 agent-db 가 passwordEnv 로 읽는다. 브라우저 저장소에는 없다.
 
-export type ChartType = 'line' | 'step' | 'area' | 'bar' | 'stacked-bar' | 'scatter' | 'histogram' | 'heatmap' | 'box'
+export type ChartType = 'line' | 'step' | 'area' | 'bar' | 'stacked-bar' | 'scatter' | 'histogram' | 'heatmap' | 'box' | 'stat'
 export type CardView = { kind: 'table' } | { kind: 'chart'; type: ChartType; x: string; y: string[]; series?: string }
 
 interface CardBase extends Base {
