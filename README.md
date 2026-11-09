@@ -1,9 +1,10 @@
 # WorkBench
 
-백엔드 없이 돌아가는 팀 운영 · 자동화 도구.
+이 PC 에서 돌아가는 팀 운영 · 자동화 도구.
 
 운영 명령을 한곳에 정리하고, 반복 업무를 **런북(워크플로우)** 으로 묶어 단계마다 자동화 도구(명령 복사, 템플릿, 체크리스트, 타이머, 링크)를 끼워 넣는 React 단일 페이지 앱입니다.
-서버가 없습니다. 데이터는 브라우저 IndexedDB에 저장되고, JSON 내보내기/가져오기로 백업과 공유를 합니다.
+데이터는 브라우저 IndexedDB에 저장되고, JSON 내보내기/가져오기로 백업과 공유를 합니다.
+작업대 카드의 Oracle 조회는 `npm run dev` 가 띄우는 agent-db 가 맡습니다.
 
 ## 주요 기능
 
@@ -44,6 +45,22 @@ npm run build      # dist/ 에 정적 파일 생성
 npm run preview    # 빌드 결과 미리보기
 npm run lint
 ```
+
+### Oracle 조회 (agent-db)
+
+작업대 카드의 SQL 은 [agent-db-plugin](https://github.com/ollybaysion/agent-db-plugin) 이 Oracle 에서 읽기 전용으로 돌립니다.
+`npm run dev` · `npm run preview` 가 agent-db MCP 서버를 자식 프로세스로 띄우고, 화면은 같은 주소의 `/__agentdb/*` 로 SQL 을 넘깁니다.
+
+1. 회사 PC(WSL)는 Windows 쪽 Node 로 agent-db 를 띄웁니다. 기본 명령은 `node.exe C:/tools/agent-db/server.mjs` 입니다.
+   다른 명령은 `AGENT_DB_COMMAND` · `AGENT_DB_SERVER` 환경 변수로 바꿉니다.
+   예: `AGENT_DB_COMMAND=node AGENT_DB_SERVER=~/work/claude-plugins/agent-db-plugin/dist/server.mjs npm run dev`
+2. 설정 › DB 연결 맨 위에서 agent-db 상태와 alias 목록을 확인합니다.
+3. 연결마다 **agent-db alias** 를 고르고 **연결 테스트**를 누릅니다. alias 가 없는 연결은 가짜 결과를 씁니다.
+
+- alias · 접속 문자열 · 비밀번호(`passwordEnv`)는 agent-db 의 `connections.json` 이 가집니다. WorkBench 는 alias 이름만 저장합니다.
+- 읽기 전용 울타리 · 표 허용/차단 · 감사 기록은 agent-db 가 합니다. 행은 1000 까지 받고, 잘리면 카드에 "N 행에서 잘림"을 보입니다.
+- 통로는 같은 출처 화면의 요청만 받습니다(`Origin` 검사 + `x-workbench` 머리). 빌드한 `dist/index.html` 을 파일로 열면 통로가 없어 가짜 결과를 씁니다.
+- 변수 띠 값은 글자로 넘어갑니다. DATE 열과 비교할 때는 `TO_DATE(:from, 'YYYY-MM-DD HH24:MI')` 처럼 모양을 적으세요.
 
 `dist/`는 정적 파일만 담고 있어 어디에나 올릴 수 있습니다(GitHub Pages, 사내 웹서버, S3 등).
 `base: './'`와 HashRouter를 쓰고 번들을 일반 스크립트(IIFE)로 만들기 때문에 `dist/index.html`을 파일로 바로 열어도 동작합니다.

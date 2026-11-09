@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import type { Connection } from '../../types'
 import { useStore } from '../../store'
 import { connsNamed } from '../../lib/conn'
@@ -27,7 +28,7 @@ export default function ConnBand({ names, connOf, onPick }: Props) {
               <select value={cur?.id ?? ''} onChange={(e) => onPick(name, e.target.value)} aria-label={`${name} 연결`}>
                 {opts.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {envName(c.envId)} · {c.host}
+                    {envName(c.envId)} · {c.alias ? `agent-db ${c.alias}` : `${c.host || '-'} (가짜 결과)`}
                   </option>
                 ))}
               </select>
@@ -37,6 +38,11 @@ export default function ConnBand({ names, connOf, onPick }: Props) {
           </label>
         )
       })}
+      {names.some((n) => !connOf(n)?.alias) && (
+        <Link className="pill amber fake" to="/settings/connections" title="연결에 agent-db alias 를 고르면 Oracle 에서 조회합니다">
+          가짜 결과 쓰는 연결 있음 · DB 연결 설정 ›
+        </Link>
+      )}
     </div>
   )
 }

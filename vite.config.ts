@@ -1,5 +1,6 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig, type Plugin } from 'vite'
+import { agentDb } from './server/agentDb.ts'
 
 /**
  * 빌드 결과(dist/index.html)를 file:// 로 직접 열어도 동작하도록
@@ -21,7 +22,7 @@ function classicScript(): Plugin {
 // base './' — file:// 및 GitHub Pages 하위 경로에서도 동작하도록 상대 경로로 빌드
 export default defineConfig({
   base: './',
-  plugins: [react(), classicScript()],
+  plugins: [react(), classicScript(), agentDb()],
   build: {
     chunkSizeWarningLimit: 1000,
     modulePreload: false,

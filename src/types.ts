@@ -95,7 +95,9 @@ export interface Connection extends Base {
   schema: string
   user: string
   readOnly: boolean
-} // 비밀번호는 서버에만 둔다. 브라우저 저장소에는 없다.
+  /** agent-db 의 alias(connections.json). 있으면 카드를 agent-db 로 조회하고, 없으면 가짜 결과를 쓴다 */
+  alias?: string
+} // 비밀번호는 agent-db 가 passwordEnv 로 읽는다. 브라우저 저장소에는 없다.
 
 export type ChartType = 'line' | 'step' | 'area' | 'bar' | 'stacked-bar' | 'scatter' | 'histogram' | 'heatmap' | 'box'
 export type CardView = { kind: 'table' } | { kind: 'chart'; type: ChartType; x: string; y: string[]; series?: string }
@@ -142,6 +144,8 @@ export interface QueryResult {
   rows: Cell[][]
   truncated: boolean
   elapsedMs: number
+  /** 잘린 까닭 같은 짧은 안내(agent-db 의 hint) */
+  note?: string
 } // fdc-agent-be 의 Table 과 같은 모양
 
 export interface ExportBundle {

@@ -92,7 +92,8 @@ function BoardView({ board }: { board: Board }) {
   // 처음 열 때 전부, 그 뒤에는 쓰는 변수 값(또는 SQL · 연결)이 바뀐 카드만 다시 조회
   useEffect(() => {
     for (const card of queryCards) {
-      const key = JSON.stringify([connOf(card)?.id, card.sql, pickBinds(card.sql, board.vars)])
+      const conn = connOf(card)
+      const key = JSON.stringify([conn?.id, conn?.alias, card.sql, pickBinds(card.sql, board.vars)])
       if (keys.current[card.id] !== key) {
         keys.current[card.id] = key
         runCard(card)

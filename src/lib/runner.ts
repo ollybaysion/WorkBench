@@ -1,8 +1,7 @@
 import type { Connection, QueryCard, QueryResult } from '../types'
 import { fixtures } from './fixtures'
+import { runOnAgent } from './agentDb'
 
-/** 서버가 자르는 행 상한 */
-export const ROW_CAP = 10000
 
 /** 카드 하나를 돌린다. 페이지는 이 인터페이스만 쓴다 — 6 단계에서 서버 실행기로 바꿔 끼운다 */
 export interface Runner {
@@ -25,5 +24,7 @@ export const fixtureRunner: Runner = {
   },
 }
 
-/** 페이지가 쓰는 실행기. 6 단계에서 서버 실행기로 바꿔 끼운다 */
-export const runner: Runner = fixtureRunner
+/** 페이지가 쓰는 실행기. 연결에 agent-db alias 가 있으면 agent-db(Oracle), 없으면 가짜 결과 */
+export const runner: Runner = {
+  run: (card, conn, vars) => (conn.alias ? runOnAgent(card, conn, vars) : fixtureRunner.run(card, conn, vars)),
+}

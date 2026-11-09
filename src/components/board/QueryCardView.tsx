@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Connection, QueryCard } from '../../types'
-import { ROW_CAP, type QueryState } from '../../lib/runner'
+import type { QueryState } from '../../lib/runner'
 import { fmtSec } from '../../lib/util'
 import { useStore } from '../../store'
 import ResultTable, { ROW_H_COMPACT } from './ResultTable'
@@ -42,7 +42,11 @@ export function QueryFoot({ run }: { run?: QueryState }) {
   return (
     <>
       <span>{run.result.rows.length} 행</span>
-      {run.result.truncated && <span className="trunc">⚠ {ROW_CAP} 행에서 잘림</span>}
+      {run.result.truncated && (
+        <span className="trunc" title={run.result.note}>
+          ⚠ {run.result.rows.length} 행에서 잘림
+        </span>
+      )}
       <span className="sp" />
       <span>{fmtSec(run.result.elapsedMs)}</span>
     </>

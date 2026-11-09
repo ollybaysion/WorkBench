@@ -1,8 +1,9 @@
-import { useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useStore } from '../store'
 import type { Connection } from '../types'
 import { connNames, resolveConn } from '../lib/conn'
 import { now, uid } from '../lib/util'
+import { agentStatus, pingAlias, type AgentStatus } from '../lib/agentDb'
 import Topbar from '../components/Topbar'
 import SettingsTabs from '../components/SettingsTabs'
 
@@ -19,6 +20,20 @@ export default function ConnectionsPage() {
   const [envId, setEnvId] = useState(() => activeEnvId ?? envs[0]?.id ?? '')
   const [open, setOpen] = useState<Open | null>(null)
   const [dirty, setDirty] = useState(false)
+  // agent-db 상태와 alias 목록. null 은 확인하는 중
+  const [agent, setAgent] = useState<AgentStatus | null>(null)
+  const refreshAgent = useCallback(() => {
+    setAgent(null)
+    void agentStatus().then(setAgent)
+  }, [])
+  useEffect(() => {
+    let alive = true
+    void agentStatus().then((s) => alive && setAgent(s))
+    return () => {
+      alive = false
+    }
+  }, [])
+  const aliases = agent?.ok ? agent.connections.map((c) => c.alias) : []
 
   const go = (next: Open | null) => {
     if (dirty && !window.confirm(DISCARD)) return false
@@ -65,7 +80,8 @@ export default function ConnectionsPage() {
     <>
       <Topbar title="설정" />
       <SettingsTabs />
-      <div className="panel form-col">
+      <AgentPanel status={agent} onRefresh={refreshAgent} />
+      <div className="panel form-col" style={{ marginTop: 14 }}>
         <div className="btn-row">
           <h4 style={{ margin: 0 }}>DB 연결</h4>
           <span className="pill green">Oracle</span>
@@ -97,13 +113,13 @@ export default function ConnectionsPage() {
                 <span className="nm">새 연결</span>
               </div>
               <div className="crow-b">
-                <ConnForm key={open.draft.id} conn={open.draft} isNew onDirty={setDirty} onClose={close} onSaved={saved} />
+                <ConnForm key={open.draft.id} conn={open.draft} isNew aliases={aliases} onDirty={setDirty} onClose={close} onSaved={saved} />
               </div>
             </div>
           )}
           {inEnv.map((c) => (
             <ConnRow key={c.id} conn={c} open={openId === c.id} onToggle={() => go(openId === c.id ? null : { id: c.id })}>
-              <ConnForm key={`${c.id}:${c.updatedAt}`} conn={c} isNew={false} onDirty={setDirty} onClose={close} onSaved={saved} />
+              <ConnForm key={`${c.id}:${c.updatedAt}`} conn={c} isNew={false} aliases={aliases} onDirty={setDirty} onClose={close} onSaved={saved} />
             </ConnRow>
           ))}
           {missing.map((n) => (
@@ -121,8 +137,8 @@ export default function ConnectionsPage() {
         </div>
 
         <div className="note-box">
-          카드는 연결 <b>이름</b>(FDC-L1 · LOGDB …)만 가리킵니다. 작업대는 이름마다 어느 환경의 연결에 붙을지 따로 고릅니다(작업대 위 연결 띠). 비밀번호 · 연결 테스트 ·
-          타임아웃(연결 10 s · 쿼리 30 s · 행 상한 10000)은 로컬 서버가 맡습니다.
+          카드는 연결 <b>이름</b>(FDC-L1 · LOGDB …)만 가리킵니다. 작업대는 이름마다 어느 환경의 연결에 붙을지 따로 고릅니다(작업대 위 연결 띠). 연결에 agent-db
+          alias 를 고르면 그 연결의 카드는 agent-db 로 Oracle 을 조회합니다. alias 가 없는 연결은 가짜 결과를 씁니다.
         </div>
       </div>
     </>
@@ -142,7 +158,11 @@ function ConnRow({ conn, open, onToggle, children }: { conn: Connection; open: b
           {conn.host}:{conn.port}/{conn.service}
         </span>
         <span className="mono small muted">{conn.user}</span>
-        {conn.readOnly ? <span className="pill gray">읽기 전용</span> : <span className="pill amber">읽기 전용 꺼짐</span>}
+        {conn.alias ? (
+          <span className="pill green mono">agent-db · {conn.alias}</span>
+        ) : (
+          <span className="pill amber">가짜 결과</span>
+        )}
         <span className="small muted">카드 {uses}</span>
       </button>
       {open && <div className="crow-b">{children}</div>}
@@ -153,12 +173,14 @@ function ConnRow({ conn, open, onToggle, children }: { conn: Connection; open: b
 interface FormProps {
   conn: Connection
   isNew: boolean
+  /** agent-db 가 알려 준 alias 목록 */
+  aliases: string[]
   onDirty: (dirty: boolean) => void
   onClose: () => void
   onSaved: (c: Pick<Connection, 'id' | 'envId'>) => void
 }
 
-function ConnForm({ conn, isNew, onDirty, onClose, onSaved }: FormProps) {
+function ConnForm({ conn, isNew, aliases, onDirty, onClose, onSaved }: FormProps) {
   const connections = useStore((s) => s.connections)
   const envs = useStore((s) => s.envs)
   const cards = useStore((s) => s.cards)
@@ -171,6 +193,7 @@ function ConnForm({ conn, isNew, onDirty, onClose, onSaved }: FormProps) {
   const [d, setD] = useState(conn)
   const [port, setPort] = useState(String(conn.port))
   const [busy, setBusy] = useState(false)
+  const [test, setTest] = useState<{ busy: true } | { busy: false; ok: boolean; msg: string } | null>(null)
 
   const set = (patch: Partial<Connection>) => {
     setD((x) => ({ ...x, ...patch }))
@@ -183,15 +206,21 @@ function ConnForm({ conn, isNew, onDirty, onClose, onSaved }: FormProps) {
     ? '이름을 넣으세요'
     : connections.some((c) => c.id !== d.id && c.envId === d.envId && c.name === name)
       ? `${envName} 에 ${name} 연결이 이미 있습니다`
-      : !d.host.trim()
-        ? '호스트를 넣으세요'
-        : !(Number.isInteger(portN) && portN >= 1 && portN <= 65535)
+      : !d.alias && !d.host.trim()
+        ? 'agent-db alias 를 고르거나 호스트를 넣으세요'
+        : port.trim() !== '' && !(Number.isInteger(portN) && portN >= 1 && portN <= 65535)
           ? '포트는 1~65535 정수입니다'
-          : !d.service.trim()
-            ? '서비스 이름을 넣으세요'
-            : !d.user.trim()
-              ? '사용자를 넣으세요'
-              : undefined
+          : undefined
+
+  const runTest = async () => {
+    if (!d.alias) return
+    setTest({ busy: true })
+    try {
+      setTest({ busy: false, ok: true, msg: `연결됨 ${await pingAlias(d.alias)} ms · agent-db ${d.alias} · SELECT 1 FROM dual` })
+    } catch (e) {
+      setTest({ busy: false, ok: false, msg: e instanceof Error ? e.message : String(e) })
+    }
+  }
 
   const oldName = conn.name
   const usedBy = cards.filter((c) => c.kind === 'query' && c.connection === oldName)
@@ -260,6 +289,26 @@ function ConnForm({ conn, isNew, onDirty, onClose, onSaved }: FormProps) {
           </select>
         </label>
         <label className="field">
+          agent-db alias (조회 통로)
+          <select
+            value={d.alias ?? ''}
+            onChange={(e) => {
+              const { alias: _old, ...rest } = d
+              setD(e.target.value ? { ...rest, alias: e.target.value } : rest)
+              setTest(null)
+              onDirty(true)
+            }}
+          >
+            <option value="">없음 · 가짜 결과</option>
+            {[...new Set([...aliases, ...(d.alias ? [d.alias] : [])])].map((a) => (
+              <option key={a} value={a}>
+                {a}
+                {aliases.includes(a) ? '' : ' (agent-db 에 없음)'}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
           사용자
           <input className="mono" value={d.user} onChange={(e) => set({ user: e.target.value })} placeholder="fdc_ro" spellCheck={false} autoComplete="off" />
         </label>
@@ -301,7 +350,19 @@ function ConnForm({ conn, isNew, onDirty, onClose, onSaved }: FormProps) {
           </code>
         </div>
       </div>
-      {!d.readOnly && <div className="note-box warn">읽기 전용이 꺼져 있습니다. 운영 연결은 켜기를 권합니다.</div>}
+      {!d.readOnly && !d.alias && <div className="note-box warn">읽기 전용이 꺼져 있습니다. 운영 연결은 켜기를 권합니다.</div>}
+      {d.alias && (
+        <div className="btn-row">
+          <button type="button" className="btn" onClick={() => void runTest()} disabled={test?.busy === true}>
+            ▶ 연결 테스트
+          </button>
+          {test && (
+            <span className={'tres' + (test.busy ? '' : test.ok ? ' ok' : ' bad')} role="status">
+              {test.busy ? '붙어 보는 중…' : test.msg}
+            </span>
+          )}
+        </div>
+      )}
 
       {!isNew && (
         <div className="field">
@@ -337,5 +398,57 @@ function ConnForm({ conn, isNew, onDirty, onClose, onSaved }: FormProps) {
         </button>
       </div>
     </form>
+  )
+}
+
+/** agent-db 상태: 띄우는 명령, alias 목록과 비밀번호 상태 */
+function AgentPanel({ status, onRefresh }: { status: AgentStatus | null; onRefresh: () => void }) {
+  return (
+    <div className="panel form-col">
+      <h4>
+        🔌 agent-db
+        {status === null ? (
+          <span className="pill gray">확인하는 중…</span>
+        ) : status.ok ? (
+          <span className="pill green">연결됨 · alias {status.connections.length}</span>
+        ) : (
+          <span className="pill red">붙지 못함</span>
+        )}
+        <span className="small muted" style={{ fontWeight: 400 }}>
+          npm run dev 가 agent-db 를 띄워 Oracle 을 읽기 전용으로 조회합니다. 행은 1000 까지 받습니다.
+        </span>
+        <button type="button" className="btn small" style={{ marginLeft: 'auto' }} onClick={onRefresh} disabled={status === null}>
+          ↻ 다시 확인
+        </button>
+      </h4>
+      {status?.command && <code className="conn-str">{status.command}</code>}
+      {status && !status.ok && <div className="tres bad">{status.error}</div>}
+      {status?.ok && (
+        <>
+          {status.connections.length ? (
+            <div className="chips">
+              {status.connections.map((c) => (
+                <span key={c.alias} className={'chip mono' + (c.passwordStatus === 'set' ? '' : ' warn')} title={`${c.user} · 비밀번호 ${c.passwordStatus}${c.description ? ` · ${c.description}` : ''}`}>
+                  {c.alias}
+                  {c.passwordStatus === 'set' ? '' : ` · 비밀번호 ${c.passwordStatus}`}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span className="small muted">agent-db 에 alias 가 없습니다. connections.json 을 확인하세요.</span>
+          )}
+          {[...status.errors, ...(status.hint ? [status.hint] : [])].map((m) => (
+            <div key={String(m)} className="note-box warn">
+              {String(m)}
+            </div>
+          ))}
+        </>
+      )}
+      {status && !status.ok && (
+        <div className="note-box">
+          명령은 AGENT_DB_COMMAND · AGENT_DB_SERVER 환경 변수로 바꿉니다(기본 <code>node.exe C:/tools/agent-db/server.mjs</code>). 바꾼 뒤 npm run dev 를 다시 켜세요.
+        </div>
+      )}
+    </div>
   )
 }
