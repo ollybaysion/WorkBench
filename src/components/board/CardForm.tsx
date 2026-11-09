@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { Card, CardView, ChartType } from '../../types'
+import type { Board, Card, CardView, ChartType } from '../../types'
 import { runner, type QueryState } from '../../lib/runner'
 import { extractBinds, pickBinds } from '../../lib/sql'
 import { render } from '../../lib/template'
 import { now } from '../../lib/util'
+import { connNames, resolveConn } from '../../lib/conn'
 import { useStore } from '../../store'
 import { RISK_LABEL, RISK_PILL } from '../vars'
 import { QueryBody, QueryFoot } from './QueryCardView'
@@ -27,7 +28,7 @@ interface Draft {
   kind: Card['kind']
   title: string
   description: string
-  connectionId: string
+  connection: string
   sql: string
   view: CardView['kind']
   chartType: ChartType
@@ -44,7 +45,7 @@ function toDraft(c: Card): Draft {
     kind: c.kind,
     title: c.title,
     description: c.description ?? '',
-    connectionId: q?.connectionId ?? '',
+    connection: q?.connection ?? '',
     sql: q?.sql ?? '',
     view: chart ? 'chart' : 'table',
     chartType: chart?.type ?? 'line',
@@ -75,14 +76,14 @@ function fromDraft(d: Draft, base: Card): Card {
   const series = d.series.trim()
   const view: CardView =
     d.view === 'table' ? { kind: 'table' } : { kind: 'chart', type: d.chartType, x: d.x.trim(), y: splitCols(d.y), ...(series ? { series } : {}) }
-  return { ...common, kind: 'query', connectionId: d.connectionId, sql: d.sql, keyColumns: base.kind === 'query' ? base.keyColumns : [], view }
+  return { ...common, kind: 'query', connection: d.connection, sql: d.sql, keyColumns: base.kind === 'query' ? base.keyColumns : [], view }
 }
 
 /** 저장을 막는 첫 문제. 없으면 undefined */
-function problemOf(d: Draft, connIds: string[], cmdIds: string[]): string | undefined {
+function problemOf(d: Draft, names: string[], cmdIds: string[]): string | undefined {
   if (!d.title.trim()) return '제목을 넣으세요'
   if (d.kind === 'command') return cmdIds.includes(d.commandId) ? undefined : '명령을 고르세요'
-  if (!connIds.includes(d.connectionId)) return '연결을 고르세요'
+  if (!names.includes(d.connection)) return '연결을 고르세요'
   if (!d.sql.trim()) return 'SQL 을 넣으세요'
   if (d.view === 'chart' && (!d.x.trim() || splitCols(d.y).length === 0)) return '그래프의 x 열과 y 열을 넣으세요'
   return undefined
@@ -106,6 +107,8 @@ interface Props {
   /** 작업판 위 크기. 보관함 카드는 undefined */
   size?: { w: number; h: number }
   boardVars: Record<string, string>
+  /** 미리보기가 쓸 연결 선택(작업판의 연결 띠) */
+  boardConns: Board['conns']
   onSave: (card: Card) => Promise<void>
   onCancel: () => void
   onDelete: () => void
@@ -115,7 +118,7 @@ interface Props {
 }
 
 /** 카드 폼(W4 조회 · W9 명령). 크기는 작업판에 바로 반영하고, 나머지는 저장할 때 반영한다 */
-export default function CardForm({ card, isNew, size, boardVars, onSave, onCancel, onDelete, onDuplicate, onSize, onDirty }: Props) {
+export default function CardForm({ card, isNew, size, boardVars, boardConns, onSave, onCancel, onDelete, onDuplicate, onSize, onDirty }: Props) {
   const connections = useStore((s) => s.connections)
   const commands = useStore((s) => s.commands)
   const envs = useStore((s) => s.envs)
@@ -130,21 +133,23 @@ export default function CardForm({ card, isNew, size, boardVars, onSave, onCance
   useEffect(() => onDirty(dirty), [dirty, onDirty])
 
   const set = (patch: Partial<Draft>) => setD((x) => ({ ...x, ...patch }))
+  const names = connNames(connections)
   const problem = problemOf(
     d,
-    connections.map((c) => c.id),
+    names,
     commands.map((c) => c.id),
   )
   const binds = d.kind === 'query' ? extractBinds(d.sql) : []
   const cmd = d.kind === 'command' ? commands.find((c) => c.id === d.commandId) : undefined
   const envName = (envId: string) => envs.find((e) => e.id === envId)?.name ?? envId
+  const previewConn = d.kind === 'query' ? resolveConn(d.connection, { conns: boardConns }, connections, envs) : undefined
 
   const runPreview = () => {
     const next = fromDraft(d, card)
     if (next.kind !== 'query') return
     const n = ++seq.current
     setPreview({ status: 'loading' })
-    const conn = connections.find((c) => c.id === next.connectionId)
+    const conn = previewConn
     const p = conn ? runner.run(next, conn, pickBinds(next.sql, boardVars)) : Promise.reject(new Error('연결이 없습니다'))
     p.then(
       (result) => n === seq.current && setPreview({ status: 'ok', result, at: now() }),
@@ -202,15 +207,20 @@ export default function CardForm({ card, isNew, size, boardVars, onSave, onCance
       {d.kind === 'query' ? (
         <>
           <label className="field">
-            연결
-            <select value={d.connectionId} onChange={(e) => set({ connectionId: e.target.value })}>
+            연결 (이름)
+            <select value={d.connection} onChange={(e) => set({ connection: e.target.value })}>
               <option value="">고르세요</option>
-              {connections.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} · {envName(c.envId)}
+              {names.map((n) => (
+                <option key={n} value={n}>
+                  {n}
                 </option>
               ))}
             </select>
+            <span className="small muted">
+              {previewConn
+                ? `이 작업판에서는 ${envName(previewConn.envId)} · ${previewConn.host} 에 붙습니다. 환경은 작업대의 연결 띠에서 바꿉니다.`
+                : '환경은 작업대의 연결 띠에서 고릅니다.'}
+            </span>
           </label>
           <label className="field">
             SQL (바인드는 :이름)

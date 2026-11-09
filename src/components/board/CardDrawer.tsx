@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import type { Card, CommandCard, QueryCard } from '../../types'
+import type { Card, CommandCard, Connection, QueryCard } from '../../types'
 import { ROW_CAP, type QueryState } from '../../lib/runner'
 import { extractBinds } from '../../lib/sql'
 import { render } from '../../lib/template'
@@ -12,6 +12,7 @@ import { copyCommand, resolveCommandVars, varsOf } from './command'
 
 interface Props {
   card: Card
+  conn?: Connection
   run?: QueryState
   boardVars: Record<string, string>
   checks?: boolean[]
@@ -21,7 +22,7 @@ interface Props {
 }
 
 /** 오른쪽 서랍. 폭 min(680px, 100vw), 전체 높이. 배경 누름 · Esc 로 닫힌다 */
-export default function CardDrawer({ card, run, boardVars, checks, onChecks, onClose, onRerun }: Props) {
+export default function CardDrawer({ card, conn, run, boardVars, checks, onChecks, onClose, onRerun }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     closeRef.current?.focus()
@@ -31,7 +32,6 @@ export default function CardDrawer({ card, run, boardVars, checks, onChecks, onC
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
-  const conn = useStore((s) => (card.kind === 'query' ? s.connections.find((c) => c.id === card.connectionId) : undefined))
   const cmd = useStore((s) => (card.kind === 'command' ? s.commands.find((c) => c.id === card.commandId) : undefined))
 
   return (
@@ -45,7 +45,7 @@ export default function CardDrawer({ card, run, boardVars, checks, onChecks, onC
           {card.kind === 'query' ? (
             <>
               {card.view.kind === 'chart' && <span className="pill gray">{card.view.type}</span>}
-              <ConnTag conn={conn} />
+              <ConnTag conn={conn} name={card.connection} />
               <button type="button" className="btn small" onClick={onRerun} disabled={run?.status === 'loading'}>
                 ↻ 다시 조회
               </button>

@@ -4,6 +4,7 @@ import type { Command, Runbook, RunbookRun, EnvPreset, Settings, ExportBundle, C
 import { seedCommands, seedEnvs, seedRunbooks } from './lib/seed'
 import { seedBoardCommands, seedBoards, seedCards, seedConnections } from './lib/seedBoard'
 import { now } from './lib/util'
+import { migrateBoards, migrateCards } from './lib/conn'
 
 const defaultSettings: Settings = { theme: 'system', userName: '', activeEnvId: 'env_prod' }
 
@@ -95,7 +96,7 @@ export const useStore = create<State>((set, get) => ({
         await db.commands.bulkPut(seedBoardCommands.filter((_, i) => !have[i]))
       })
     }
-    const [commands, runbooks, runs, envs, connections, cards, boards, s] = await Promise.all([
+    const [commands, runbooks, runs, envs, connections, loadedCards, loadedBoards, s] = await Promise.all([
       db.commands.toArray(),
       db.runbooks.toArray(),
       db.runs.toArray(),
@@ -105,6 +106,21 @@ export const useStore = create<State>((set, get) => ({
       db.boards.toArray(),
       db.kv.get('settings'),
     ])
+    // 예전 카드(connectionId)를 연결 이름으로 옮긴다. 예전 백업 파일을 가져온 뒤에도 이 길을 탄다
+    let cards = loadedCards
+    let boards = loadedBoards
+    const fixedCards = migrateCards(cards, connections)
+    if (fixedCards.length) {
+      const ids = new Set(fixedCards.map((c) => c.id))
+      const fixedBoards = migrateBoards(boards, cards.filter((c) => ids.has(c.id)), connections)
+      await db.transaction('rw', [db.cards, db.boards], async () => {
+        await db.cards.bulkPut(fixedCards)
+        await db.boards.bulkPut(fixedBoards)
+      })
+      const replace = <T extends { id: string }>(all: T[], fixed: T[]) => all.map((x) => fixed.find((f) => f.id === x.id) ?? x)
+      cards = replace(cards, fixedCards)
+      boards = replace(boards, fixedBoards)
+    }
     set({
       ready: true,
       commands: sortByUpdated(commands),
@@ -175,8 +191,16 @@ export const useStore = create<State>((set, get) => ({
     set({ connections: sortByUpdated([c, ...get().connections.filter((x) => x.id !== c.id)]) })
   },
   deleteConnection: async (id) => {
-    await db.connections.delete(id)
-    set({ connections: get().connections.filter((x) => x.id !== id) })
+    // 이 연결을 고른 작업판은 선택을 비운다(같은 이름의 다른 연결로 넘어간다)
+    const touched = get()
+      .boards.filter((b) => Object.values(b.conns ?? {}).includes(id))
+      .map((b) => ({ ...b, conns: Object.fromEntries(Object.entries(b.conns ?? {}).filter(([, v]) => v !== id)), updatedAt: now() }))
+    await db.transaction('rw', [db.connections, db.boards], async () => {
+      await db.connections.delete(id)
+      await db.boards.bulkPut(touched)
+    })
+    const ids = new Set(touched.map((b) => b.id))
+    set({ connections: get().connections.filter((x) => x.id !== id), boards: sortByUpdated([...touched, ...get().boards.filter((b) => !ids.has(b.id))]) })
   },
   upsertCard: async (c) => {
     c = { ...c, updatedAt: now() }

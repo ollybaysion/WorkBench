@@ -86,7 +86,7 @@ export interface Settings {
 // ===== 작업대 =====
 
 export interface Connection extends Base {
-  name: string // 'FDC-L1'. 환경이 달라도 같은 이름이면 같은 논리 DB(나중에 운영 · 개발 비교에 쓴다)
+  name: string // 연결 이름 'FDC-L1'. 환경이 달라도 같은 이름이면 같은 논리 DB. 카드는 이 이름만 가리킨다
   driver: 'oracle'
   envId: string // EnvPreset.id
   host: string
@@ -106,7 +106,7 @@ interface CardBase extends Base {
 }
 export interface QueryCard extends CardBase {
   kind: 'query'
-  connectionId: string
+  connection: string // 연결 이름(Connection.name). 실제 연결은 작업판이 이름마다 고른다(Board.conns)
   sql: string // 바인드는 `:이름`. 변수 목록은 SQL 에서 자동 추출한다(저장하지 않는다)
   keyColumns: string[] // 비교 때 행을 맞출 열. 지금은 저장만
   view: CardView
@@ -128,6 +128,8 @@ export interface Board extends Base {
   title: string
   cells: BoardCell[]
   vars: Record<string, string> // 변수 띠 값
+  /** 연결 이름 → Connection.id. 작업판마다 따로 고른다. 없으면 lib/conn.ts 의 기본 규칙 */
+  conns?: Record<string, string>
 }
 
 export interface Column {
