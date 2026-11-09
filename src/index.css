@@ -484,6 +484,12 @@ pre.code { background: var(--code-bg); color: var(--code-text); padding: 12px 14
 .qc-seg button + button { border-left: 1px solid var(--border); }
 .qc-seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
 .drawer-chart { height: 270px; flex: none; }
+.qc-status.idle { color: var(--muted); font-style: italic; }
+.qc-state.idle { flex-direction: column; gap: 6px; }
+.qc-run { color: var(--accent); }
+.qc-run:disabled { opacity: .4; cursor: default; }
+.qc-stale { border: 0; background: var(--warn-soft); color: var(--warn); border-radius: 6px; padding: 1px 8px; font: inherit; font-size: 11px; cursor: pointer; }
+.qc-stale:hover { filter: brightness(.97); }
 .board-rename { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0; }
 .board-rename .input { width: min(320px, 60vw); }
 .board-rename .input[aria-invalid="true"] { border-color: var(--danger); }

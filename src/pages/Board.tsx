@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store'
 import type { Board, Card, QueryCard } from '../types'
@@ -13,6 +13,41 @@ import BoardGrid, { type Placed } from '../components/board/BoardGrid'
 import CardDrawer from '../components/board/CardDrawer'
 
 const byTitle = (a: Board, b: Board) => a.title.localeCompare(b.title, 'ko')
+
+/**
+ * 작업판별 조회 상태. 모듈에 두어 다른 메뉴에 갔다 와도 결과가 남는다(새로고침하면 지워진다).
+ * runs: 카드별 결과 · keys: 카드별 마지막 조회의 (연결 · sql · 바인드 값) 키 · seq: 카드별 마지막 실행 번호(늦게 온 옛 결과 무시)
+ */
+interface Session {
+  runs: Record<string, QueryState>
+  keys: Record<string, string>
+  seq: Record<string, number>
+}
+const sessions = new Map<string, Session>()
+function sessionOf(boardId: string): Session {
+  let s = sessions.get(boardId)
+  if (!s) {
+    s = { runs: {}, keys: {}, seq: {} }
+    sessions.set(boardId, s)
+  }
+  return s
+}
+/** 실행을 하나 시작한다: 번호를 올리고 키를 적는다. 돌려준 번호로 늦게 온 옛 결과를 가른다 */
+function startRun(boardId: string, cardId: string, key: string): number {
+  const s = sessionOf(boardId)
+  const n = (s.seq[cardId] ?? 0) + 1
+  s.seq[cardId] = n
+  s.keys[cardId] = key
+  return n
+}
+const isLatest = (boardId: string, cardId: string, n: number) => sessionOf(boardId).seq[cardId] === n
+const lastKey = (boardId: string, cardId: string) => sessionOf(boardId).keys[cardId]
+/** 결과를 세션에 쓰고 새 runs 를 돌려준다(화면을 떠난 뒤 온 결과도 세션에 남는다) */
+function putRun(boardId: string, cardId: string, st: QueryState): Record<string, QueryState> {
+  const s = sessionOf(boardId)
+  s.runs = { ...s.runs, [cardId]: st }
+  return s.runs
+}
 
 export default function BoardPage() {
   const { id } = useParams()
@@ -43,11 +78,11 @@ function BoardView({ board }: { board: Board }) {
   const envs = useStore((s) => s.envs)
   const upsertBoard = useStore((s) => s.upsertBoard)
 
-  // 조회 결과 · 상태는 페이지 로컬. IndexedDB 에 저장하지 않는다
-  const [runs, setRuns] = useState<Record<string, QueryState>>({})
+  // 조회는 사람이 ▶ 를 눌러야 돈다. 결과는 세션(모듈)에 두고 IndexedDB 에는 저장하지 않는다
+  const boardId = board.id
+  const [runs, setRuns] = useState<Record<string, QueryState>>(() => sessionOf(boardId).runs)
   const [checks, setChecks] = useState<Record<string, boolean[]>>({})
-  const seq = useRef<Record<string, number>>({}) // 카드별 마지막 실행 번호(늦게 온 옛 결과 무시)
-  const keys = useRef<Record<string, string>>({}) // 카드별 마지막 조회의 (sql · 연결 · 바인드 값) 키
+  const put = useCallback((cardId: string, st: QueryState) => setRuns(putRun(boardId, cardId, st)), [boardId])
 
   const cells = useMemo<Placed[]>(
     () =>
@@ -70,36 +105,43 @@ function BoardView({ board }: { board: Board }) {
   const connNamesUsed = useMemo(() => [...new Set(queryCards.map((c) => c.connection))], [queryCards])
   const connOf = useCallback((card: Card) => (card.kind === 'query' ? resolveConn(card.connection, { conns: board.conns }, connections, envs) : undefined), [board.conns, connections, envs])
 
-  const runCard = useCallback(
+  /** 이 키가 마지막 조회와 다르면 결과가 낡았다(변수 · alias · SQL 이 바뀜) */
+  const keyOf = useCallback(
     (card: QueryCard) => {
-      const n = (seq.current[card.id] ?? 0) + 1
-      seq.current[card.id] = n
-      setRuns((r) => ({ ...r, [card.id]: { status: 'loading' } }))
       const conn = connOf(card)
-      const p = conn ? runner.run(card, conn, pickBinds(card.sql, board.vars)) : Promise.reject(new Error(`연결 ${card.connection || '(없음)'} 이 없습니다. 설정 › DB 연결에서 만드세요`))
-      p.then(
-        (result) => {
-          if (seq.current[card.id] === n) setRuns((r) => ({ ...r, [card.id]: { status: 'ok', result, at: now() } }))
-        },
-        (e: unknown) => {
-          if (seq.current[card.id] === n) setRuns((r) => ({ ...r, [card.id]: { status: 'error', message: e instanceof Error ? e.message : String(e), at: now() } }))
-        },
-      )
+      return JSON.stringify([conn?.id, conn?.alias, card.sql, pickBinds(card.sql, board.vars)])
     },
     [connOf, board.vars],
   )
 
-  // 처음 열 때 전부, 그 뒤에는 쓰는 변수 값(또는 SQL · 연결)이 바뀐 카드만 다시 조회
-  useEffect(() => {
-    for (const card of queryCards) {
+  const runCard = useCallback(
+    (card: QueryCard) => {
+      const n = startRun(boardId, card.id, keyOf(card))
+      put(card.id, { status: 'loading' })
       const conn = connOf(card)
-      const key = JSON.stringify([conn?.id, conn?.alias, card.sql, pickBinds(card.sql, board.vars)])
-      if (keys.current[card.id] !== key) {
-        keys.current[card.id] = key
-        runCard(card)
-      }
+      const p = conn ? runner.run(card, conn, pickBinds(card.sql, board.vars)) : Promise.reject(new Error(`연결 ${card.connection || '(없음)'} 이 없습니다. 설정 › DB 연결에서 만드세요`))
+      p.then(
+        (result) => {
+          if (isLatest(boardId, card.id, n)) put(card.id, { status: 'ok', result, at: now() })
+        },
+        (e: unknown) => {
+          if (isLatest(boardId, card.id, n)) put(card.id, { status: 'error', message: e instanceof Error ? e.message : String(e), at: now() })
+        },
+      )
+    },
+    [connOf, board.vars, keyOf, put, boardId],
+  )
+
+  // 조회한 뒤 변수 · alias · SQL 이 바뀐 카드. 자동으로 다시 돌리지 않고 "변수가 바뀜" 을 붙인다
+  const stale = useMemo(() => {
+    const out: Record<string, boolean> = {}
+    for (const card of queryCards) {
+      const r = runs[card.id]
+      if (r && r.status !== 'loading' && lastKey(boardId, card.id) !== keyOf(card)) out[card.id] = true
     }
-  }, [queryCards, board.vars, runCard, connOf])
+    return out
+  }, [queryCards, runs, keyOf, boardId])
+  const staleCount = Object.keys(stale).length
 
   const runAll = () => queryCards.forEach(runCard)
   const lastAt = Object.values(runs).reduce<string | undefined>((m, r) => (r.status !== 'loading' && (!m || r.at > m) ? r.at : m), undefined)
@@ -143,8 +185,13 @@ function BoardView({ board }: { board: Board }) {
       <div className="board-sticky">
         <Topbar title={title} search="카드 · 명령 · 런북 검색">
           <span className="muted small mono">마지막 조회 {fmtTime(lastAt)}</span>
-          <button type="button" className="btn" onClick={runAll}>
-            ↻ 다시 조회
+          {staleCount > 0 && (
+            <button type="button" className="btn" onClick={() => queryCards.filter((c) => stale[c.id]).forEach(runCard)} title="변수 · alias · SQL 이 바뀐 카드만 다시 조회">
+              ⟳ 바뀐 카드 {staleCount} 조회
+            </button>
+          )}
+          <button type="button" className="btn primary" onClick={runAll} disabled={queryCards.length === 0}>
+            ▶ 전부 조회
           </button>
           <Link className="btn" to={`/settings/board/${board.id}`}>
             ✎ 편집
@@ -153,7 +200,7 @@ function BoardView({ board }: { board: Board }) {
         <ConnBand names={connNamesUsed} connOf={(name) => resolveConn(name, { conns: board.conns }, connections, envs)} onPick={pickConn} />
         <VarBand names={bindNames} vars={board.vars} onSave={saveVars} />
       </div>
-      <BoardGrid cells={cells} connOf={connOf} runs={runs} boardVars={board.vars} checks={checks} onChecks={setCardChecks} selectedId={selectedId} onOpen={open} />
+      <BoardGrid cells={cells} connOf={connOf} runs={runs} stale={stale} onRun={runCard} boardVars={board.vars} checks={checks} onChecks={setCardChecks} selectedId={selectedId} onOpen={open} />
       {selected && (
         <CardDrawer
           card={selected}
