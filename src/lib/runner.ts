@@ -1,6 +1,7 @@
 import type { Connection, QueryCard, QueryResult } from '../types'
 import { fixtures, type Fixture } from './fixtures'
 import { fdcFixtures } from './fixturesFdc'
+import { tsumFixtures } from './fixturesTsum'
 import { runOnAgent } from './agentDb'
 
 /** 카드 하나를 돌린다. 페이지는 이 인터페이스만 쓴다 — 6 단계에서 서버 실행기로 바꿔 끼운다 */
@@ -13,10 +14,10 @@ export type QueryState = { status: 'loading' } | { status: 'ok'; result: QueryRe
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
-/** 가짜 실행기: 카드 id 별 결과를 소요 시간만큼 기다린 뒤 돌려준다. FDC 확인 작업판의 결과는 변수에 따라 바뀐다 */
+/** 가짜 실행기: 카드 id 별 결과를 소요 시간만큼 기다린 뒤 돌려준다. FDC · TSUM 확인 작업판의 결과는 변수에 따라 바뀐다 */
 export const fixtureRunner: Runner = {
   async run(card, _conn, vars) {
-    const fdc = fdcFixtures[card.id]
+    const fdc = fdcFixtures[card.id] ?? tsumFixtures[card.id]
     const f: Fixture | undefined = fdc ? fdc(vars) : fixtures[card.id]
     if (!f) throw new Error(`가짜 결과가 없는 카드입니다: ${card.id}`)
     await sleep(f.delayMs)

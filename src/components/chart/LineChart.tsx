@@ -7,20 +7,30 @@ import { cssVar, seriesVar, useThemeVersion } from './theme'
 type LineType = 'line' | 'step' | 'area' | 'scatter'
 
 const LEGEND_H = 18
+const ZSTAT_H = 20 // 크게 보기의 구간 통계 줄
 const X_AXIS_H = 24
 const PHASE_H = 16 // 구간 이름 줄
 const FONT = '11px "JetBrains Mono", Consolas, monospace'
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
-/** 시간 축 글자: 하루 안이면 14:00, 넘으면 10-28 14:00 */
+/** 시각 글자. 눈금 간격(초)이 1 분보다 작으면 초, 1 초보다 작으면 ms 까지. 하루를 넘으면 날짜를 붙인다 */
+function timeText(t: number, incr: number, span: number): string {
+  const d = new Date(Math.round(t * 1000))
+  let s = `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  if (incr < 60) s += `:${pad(d.getSeconds())}`
+  if (incr < 1) s += `.${String(d.getMilliseconds()).padStart(3, '0')}`
+  return span < 86400 ? s : `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${s}`
+}
 function timeLabel(xs: number[]) {
   const span = xs.length ? xs[xs.length - 1] - xs[0] : 0
-  return (t: number) => {
-    const d = new Date(t * 1000)
-    const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`
-    return span < 86400 ? hm : `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${hm}`
-  }
+  return (t: number, incr: number) => timeText(t, incr, span)
+}
+
+/** 구간 폭 글자: 시간 축이면 ms · s, 아니면 x 단위 그대로 */
+function spanText(w: number, time: boolean): string {
+  if (!time) return fmtNum(w)
+  return w < 1 ? `${Math.round(w * 1000)} ms` : w < 120 ? `${Math.round(w * 1000) / 1000} s` : `${fmtNum(w / 60)} m`
 }
 
 /** 넘은 폭: 시간 축이면 초 · 분, 아니면 x 단위 그대로 */
@@ -30,18 +40,86 @@ function widthText(w: number, time: boolean): string {
 }
 
 const hasLimitLines = (e?: LineExtras) => !!(e?.lcl || e?.ucl)
-const needsLegend = (p: Panel) => p.title !== undefined || p.data.series.length > 1 || hasLimitLines(p.extras) || !!p.extras?.focus
+const needsLegend = (p: Panel) => p.title !== undefined || p.data.series.length > 1 || hasLimitLines(p.extras) || !!p.extras?.focus || !!p.extras?.bands
 
-/** 선 · 계단 · 영역 · 산점도(uPlot). 패널이 여럿이면 위아래로 쌓고 커서를 맞춘다. x 축은 맨 아래 패널에만 */
-export default function LineChart({ type, panels, width, height }: { type: LineType; panels: Panel[]; width: number; height: number }) {
+/**
+ * 선 · 계단 · 영역 · 산점도(uPlot). 패널이 여럿이면 위아래로 쌓고 커서를 맞춘다. x 축은 맨 아래 패널에만.
+ * zoom 이면(크게 보기) 가로로 끌어서 확대하고 두 번 눌러 되돌린다. 패널마다 보이는 구간의 통계 줄을 단다.
+ */
+export default function LineChart({ type, panels, width, height, zoom = false }: { type: LineType; panels: Panel[]; width: number; height: number; zoom?: boolean }) {
   const syncKey = useId()
-  const legends: number[] = panels.map((p) => (needsLegend(p) ? LEGEND_H : 0))
+  const legends: number[] = panels.map((p) => (needsLegend(p) ? LEGEND_H : 0) + (zoom ? ZSTAT_H : 0))
   const plotH = Math.max(60, Math.floor((height - legends.reduce((a, b) => a + b, 0) - X_AXIS_H) / panels.length))
   return (
     <div className="ch-lines">
       {panels.map((p, i) => (
-        <LinePanel key={p.title ?? i} type={type} panel={p} width={width} height={plotH + (i === panels.length - 1 ? X_AXIS_H : 0)} showX={i === panels.length - 1} legend={legends[i] > 0} syncKey={syncKey} />
+        <LinePanel key={p.title ?? i} type={type} panel={p} width={width} height={plotH + (i === panels.length - 1 ? X_AXIS_H : 0)} showX={i === panels.length - 1} legend={needsLegend(p)} syncKey={syncKey} zoom={zoom} />
       ))}
+    </div>
+  )
+}
+
+/** 보이는 x 범위 [min, max] 안의 값 통계 */
+interface RangeStat {
+  n: number
+  avg: number
+  min: number
+  max: number
+}
+function rangeStat(xs: number[], ys: (number | null)[], lo: number, hi: number): RangeStat | null {
+  let n = 0
+  let sum = 0
+  let min = Infinity
+  let max = -Infinity
+  xs.forEach((x, i) => {
+    const v = ys[i]
+    if (x < lo || x > hi || v == null) return
+    n++
+    sum += v
+    if (v < min) min = v
+    if (v > max) max = v
+  })
+  return n ? { n, avg: sum / n, min, max } : null
+}
+
+/** 구간 통계 줄: 보이는 구간 · 점 수 · avg · min · max · max-min. 시리즈가 여럿이면 앞 시리즈(겹침이면 고른 시리즈) */
+function ZoomStat({ panel, range }: { panel: Panel; range: { min: number; max: number } | null }) {
+  const { data } = panel
+  const xs = data.xs
+  if (!xs.length) return <div className="ch-zstat" />
+  const full = !range || (range.min <= xs[0] && range.max >= xs[xs.length - 1])
+  const lo = full ? xs[0] : range.min
+  const hi = full ? xs[xs.length - 1] : range.max
+  const s = data.series.find((x) => !x.muted) ?? data.series[0]
+  const st = s ? rangeStat(xs, s.values, lo, hi) : null
+  const time = data.xKind === 'time'
+  const at = (t: number) => (time ? timeText(t, 0.001, hi - lo) : fmtVal(t))
+  return (
+    <div className="ch-zstat">
+      <span className={full ? 'muted' : 'ch-zrange'}>
+        {full ? '전체' : `${at(lo)} ~ ${at(hi)}`} · {spanText(hi - lo, time)}
+      </span>
+      {st && (
+        <>
+          {data.series.length > 1 && <span className="muted">{s.name}</span>}
+          <span>
+            n <em>{st.n}</em>
+          </span>
+          <span>
+            avg <em>{fmtVal(st.avg)}</em>
+          </span>
+          <span>
+            min <em>{fmtVal(st.min)}</em>
+          </span>
+          <span>
+            max <em>{fmtVal(st.max)}</em>
+          </span>
+          <span>
+            max-min <em>{fmtVal(st.max - st.min)}</em>
+          </span>
+        </>
+      )}
+      <span className="muted ch-zhint">{full ? '가로로 끌어서 확대' : '두 번 눌러 전체 보기'}</span>
     </div>
   )
 }
@@ -91,6 +169,12 @@ function PanelLegend({ panel, time }: { panel: Panel; time: boolean }) {
           {panel.title}
         </span>
       )}
+      {extras?.bands && (
+        <span>
+          <i className="band-box" />
+          {[...new Set(extras.bands.map((b) => b.name))].join(' · ')}
+        </span>
+      )}
       {hasLimitLines(extras) && (
         <span>
           <i className="dash-line" />
@@ -110,13 +194,14 @@ function PanelLegend({ panel, time }: { panel: Panel; time: boolean }) {
   )
 }
 
-function LinePanel({ type, panel, width, height, showX, legend, syncKey }: { type: LineType; panel: Panel; width: number; height: number; showX: boolean; legend: boolean; syncKey: string }) {
+function LinePanel({ type, panel, width, height, showX, legend, syncKey, zoom }: { type: LineType; panel: Panel; width: number; height: number; showX: boolean; legend: boolean; syncKey: string; zoom: boolean }) {
   const { data, extras } = panel
   const host = useRef<HTMLDivElement>(null)
   const plot = useRef<uPlot | null>(null)
   const size = useRef({ width, height })
   const [tip, setTip] = useState<Tip | null>(null)
   const [hover, setHover] = useState(false)
+  const [range, setRange] = useState<{ min: number; max: number } | null>(null)
   const theme = useThemeVersion()
 
   // 그래프를 새로 만들 때 쓸 지금 크기(아래 효과보다 먼저 돈다)
@@ -131,6 +216,7 @@ function LinePanel({ type, panel, width, height, showX, legend, syncKey }: { typ
     const grid = cssVar('--border')
     const surface = cssVar('--surface')
     const danger = cssVar('--danger')
+    const accent = cssVar('--accent')
     const cat = data.xKind === 'cat'
     const r = devicePixelRatio
     const axis = { stroke: muted, font: FONT, grid: { stroke: grid, width: 1 }, ticks: { show: false } }
@@ -147,13 +233,14 @@ function LinePanel({ type, panel, width, height, showX, legend, syncKey }: { typ
     }
     const focusIdx = extras?.focus?.found ? data.series.length : -1 // uPlot 시리즈 번호(0 은 x). 고른 시리즈는 맨 끝
     const phases = extras?.phases ?? []
+    const bands = extras?.bands ?? []
     const over = extras?.over ?? []
     const opts: uPlot.Options = {
       ...size.current,
       padding: [phases.length ? 6 + PHASE_H : 6, 10, 0, 0],
       legend: { show: false },
       scales: { x: { time: data.xKind === 'time' } },
-      cursor: { sync: { key: syncKey }, drag: { x: false, y: false }, points: { size: 8, width: 2 } },
+      cursor: { sync: { key: syncKey }, drag: { x: zoom, y: false, setScale: zoom }, points: { size: 8, width: 2 } },
       axes: [
         {
           ...axis,
@@ -161,7 +248,7 @@ function LinePanel({ type, panel, width, height, showX, legend, syncKey }: { typ
           size: showX ? X_AXIS_H : 0,
           space: 64,
           ...(cat ? { incrs: [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000], values: (_u: uPlot, splits: number[]) => splits.map((v) => (Number.isInteger(v) ? (data.labels[v] ?? '') : '')) } : {}),
-          ...(data.xKind === 'time' ? { values: (_u: uPlot, splits: number[]) => splits.map(timeLabel(data.xs)) } : {}),
+          ...(data.xKind === 'time' ? { values: (_u: uPlot, splits: number[], _a: number, _s: number, incr: number) => splits.map((t) => timeLabel(data.xs)(t, incr)) } : {}),
         },
         { ...axis, size: 52, space: 28, values: (_u: uPlot, splits: number[]) => splits.map(fmtNum) },
       ],
@@ -189,6 +276,17 @@ function LinePanel({ type, panel, width, height, showX, legend, syncKey }: { typ
           (u) => {
             const { ctx, bbox } = u
             ctx.save()
+            // 강조 구간: 옅게 칠하고 양 끝에 선
+            for (const b of bands) {
+              const x0 = Math.max(bbox.left, u.valToPos(b.from, 'x', true))
+              const x1 = Math.min(bbox.left + bbox.width, u.valToPos(b.to, 'x', true))
+              if (x1 <= x0) continue
+              ctx.fillStyle = `${accent}1c`
+              ctx.fillRect(x0, bbox.top, x1 - x0, bbox.height)
+              ctx.fillStyle = `${accent}b3`
+              ctx.fillRect(x0, bbox.top, r, bbox.height)
+              ctx.fillRect(x1 - r, bbox.top, r, bbox.height)
+            }
             ctx.fillStyle = `${danger}1f`
             for (const o of over) {
               const x0 = Math.max(bbox.left, u.valToPos(o.from, 'x', true))
@@ -251,6 +349,11 @@ function LinePanel({ type, panel, width, height, showX, legend, syncKey }: { typ
             ctx.restore()
           },
         ],
+        setScale: [
+          (u, key) => {
+            if (key === 'x' && zoom) setRange({ min: u.scales.x.min ?? 0, max: u.scales.x.max ?? 0 })
+          },
+        ],
         setCursor: [
           (u) => {
             const idx = u.cursor.idx
@@ -266,7 +369,7 @@ function LinePanel({ type, panel, width, height, showX, legend, syncKey }: { typ
       u.destroy()
       plot.current = null
     }
-  }, [data, extras, type, showX, syncKey, theme])
+  }, [data, extras, type, showX, syncKey, theme, zoom])
 
   useEffect(() => {
     plot.current?.setSize({ width, height })
@@ -283,13 +386,14 @@ function LinePanel({ type, panel, width, height, showX, legend, syncKey }: { typ
   return (
     <div className="ch-panel" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
       {legend && <PanelLegend panel={panel} time={data.xKind === 'time'} />}
+      {zoom && <ZoomStat panel={panel} range={range} />}
       <div ref={host} className="ch-host" />
       {hover && tip && (
         <div
           className="ch-tip"
           style={{
             left: tip.left + (flip ? -12 : 12),
-            top: Math.max(0, tip.top - 10) + (legend ? LEGEND_H : 0),
+            top: Math.max(0, tip.top - 10) + (legend ? LEGEND_H : 0) + (zoom ? ZSTAT_H : 0),
             transform: flip ? 'translateX(-100%)' : undefined,
           }}
         >

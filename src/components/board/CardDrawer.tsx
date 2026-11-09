@@ -128,7 +128,7 @@ function QueryDrawer({ card, run, boardVars, connName, onRerun }: { card: QueryC
         </div>
         {card.view.kind === 'chart' && ok && ok.rows.length > 0 && (
           <div className="drawer-chart">
-            <Chart result={ok} spec={card.view} marks={marks} />
+            <Chart result={ok} spec={card.view} marks={marks} zoom />
           </div>
         )}
         <div className="btn-row drawer-tbar">

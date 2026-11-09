@@ -112,6 +112,8 @@ export type CardView =
       focus?: string
       /** 구간 열(STEP 같은). 값이 바뀌는 x 에 세로 선과 구간 이름을 그린다(선 그래프) */
       phase?: string
+      /** 강조 구간 열(TSUM 구간 같은). 값이 있는 x 를 칠하고 그 값을 이름으로 보인다(선 그래프) */
+      band?: string
     }
 
 /** 눌러서 변수 넣기: 결과 열 col 의 값을 변수 var 에 넣는다 */

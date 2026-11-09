@@ -15,8 +15,8 @@ export interface RowHooks {
   hint: (row: number) => string
 }
 
-/** 카드 · 서랍 · 폼 미리보기가 함께 쓰는 그래프. 부모가 준 칸을 꽉 채운다 */
-export default function Chart({ result, spec, marks }: { result: QueryResult; spec: ChartSpec; marks?: Marks }) {
+/** 카드 · 크게 보기 · 폼 미리보기가 함께 쓰는 그래프. 부모가 준 칸을 꽉 채운다. zoom 은 크게 보기의 끌어서 확대 */
+export default function Chart({ result, spec, marks, zoom }: { result: QueryResult; spec: ChartSpec; marks?: Marks; zoom?: boolean }) {
   const focusValue = spec.focus ? (marks?.vars[spec.focus] ?? '') : undefined
   // spec 은 폼에서 매번 새로 만들어지므로 내용(key)으로 묶는다
   const key = JSON.stringify([spec, marks?.limits ?? null, focusValue ?? null])
@@ -50,7 +50,7 @@ export default function Chart({ result, spec, marks }: { result: QueryResult; sp
         w > 0 &&
         ch > 40 && (
           <>
-            {prepared.kind === 'lines' && <LineChart type={prepared.type} panels={prepared.panels} width={w} height={ch} />}
+            {prepared.kind === 'lines' && <LineChart type={prepared.type} panels={prepared.panels} width={w} height={ch} zoom={zoom} />}
             {prepared.kind === 'bars' && <BarChart data={prepared.data} stacked={prepared.stacked} width={w} height={ch} />}
             {prepared.kind === 'heatmap' && <HeatmapChart {...prepared} rows={rows} width={w} height={ch} />}
             {prepared.kind === 'box' && <BoxChart groups={prepared.groups} yName={prepared.yName} width={w} height={ch} />}

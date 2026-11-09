@@ -39,6 +39,7 @@ interface Draft {
   series: string
   focus: string // 겹침 변수
   phase: string // 구간 열
+  band: string // 강조 구간 열
   picks: string // "lot_id, slot:wafer"
   lcl: string
   ucl: string
@@ -64,6 +65,7 @@ function toDraft(c: Card): Draft {
     series: chart?.series ?? '',
     focus: chart?.focus ?? '',
     phase: chart?.phase ?? '',
+    band: chart?.band ?? '',
     picks: formatPicks(q?.picks),
     lcl: q?.limits?.lcl ?? '',
     ucl: q?.limits?.ucl ?? '',
@@ -85,7 +87,8 @@ function viewOf(d: Draft): CardView {
   const line = LINE_TYPES.includes(d.chartType)
   const focus = line ? d.focus.trim() : ''
   const phase = line ? d.phase.trim() : ''
-  return { kind: 'chart', type: d.chartType, x: d.x.trim(), y: splitCols(d.y), ...(series ? { series } : {}), ...(focus ? { focus } : {}), ...(phase ? { phase } : {}) }
+  const band = line ? d.band.trim() : ''
+  return { kind: 'chart', type: d.chartType, x: d.x.trim(), y: splitCols(d.y), ...(series ? { series } : {}), ...(focus ? { focus } : {}), ...(phase ? { phase } : {}), ...(band ? { band } : {}) }
 }
 
 function limitsOf(d: Draft): Limits | undefined {
@@ -333,6 +336,11 @@ export default function CardForm({ card, isNew, size, boardVars, boardConns, onS
                     구간 열 (선택)
                     <input className="mono" value={d.phase} onChange={(e) => set({ phase: e.target.value })} placeholder="step" spellCheck={false} />
                     <span className="small muted">값이 바뀌는 자리에 세로 선과 구간 이름을 그립니다.</span>
+                  </label>
+                  <label className="field">
+                    강조 구간 열 (선택)
+                    <input className="mono" value={d.band} onChange={(e) => set({ band: e.target.value })} placeholder="tsum_win" spellCheck={false} />
+                    <span className="small muted">값이 있는 행의 x 구간을 옅게 칠하고, 그 값을 범례에 보입니다.</span>
                   </label>
                 </>
               )}

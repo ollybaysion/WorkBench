@@ -260,6 +260,83 @@ export const seedFdcBoard: Board = {
   conns: { 'FDC-DEMO': 'conn_fdc_demo' },
 }
 
+// ===== TSUM 확인 작업판 =====
+// TSUM 은 trace 의 한 구간(recipe · start step ~ end step)을 통계 하나로 줄인 값이다.
+// 기준 정보에서 TSUM 항목을 누르면 tsum_id · sensor 가 바뀌고, 구간은 SQL 이 기준 정보에서 읽는다.
+// 웨이퍼별 값에서 웨이퍼를, 구간 통계에서 센서를 눌러 고른다.
+
+const tsum = (id: string, title: string, sql: string, view: CardView, extra: { picks?: PickRule[]; limits?: Limits } = {}): QueryCard => ({
+  ...base(id, ['fdc', 'tsum']),
+  kind: 'query',
+  title,
+  connection: 'FDC-DEMO',
+  sql,
+  keyColumns: [],
+  view,
+  ...extra,
+})
+
+export const seedTsumCards: Card[] = [
+  tsum(
+    'card_tsum_items',
+    'TSUM 기준 정보',
+    'select i.tsum_id, i.recipe, i.sensor, i.start_step, i.end_step, i.stat, i.lsl, i.usl\nfrom tsum_item i\nwhere i.eqp_id = :eqp_id and i.chamber = :chamber\norder by i.tsum_id',
+    { kind: 'table' },
+    { picks: [pick('tsum_id'), pick('sensor')] },
+  ),
+  tsum(
+    'card_tsum_value',
+    'TSUM 값 · 지금 웨이퍼',
+    "select '저장 ' || i.tsum_id || ' ' || i.stat as k, r.tsum_value as v, i.lsl, i.usl\nfrom tsum_result r join tsum_item i on i.tsum_id = r.tsum_id\nwhere r.lot_id = :lot_id and r.slot = :wafer and r.tsum_id = :tsum_id\nunion all\nselect 'trace 로 다시 계산', case i.stat when 'MAX' then max(t.value) when 'MIN' then min(t.value)\n         when 'AVG' then avg(t.value) else max(t.value) - min(t.value) end, i.lsl, i.usl\nfrom fdc_trace t join tsum_item i on i.tsum_id = :tsum_id and t.param = i.sensor\nwhere t.lot_id = :lot_id and t.slot = :wafer and t.step between i.start_step and i.end_step\ngroup by i.stat, i.lsl, i.usl",
+    { kind: 'chart', type: 'stat', x: 'k', y: ['v'] },
+    { limits: { lcl: 'lsl', ucl: 'usl' } },
+  ),
+  tsum(
+    'card_tsum_wafers',
+    '웨이퍼별 TSUM 값',
+    "select r.slot, r.tsum_value, i.lsl, i.usl, to_char(r.calc_ts, 'HH24:MI:SS.FF3') as calc_ts\nfrom tsum_result r join tsum_item i on i.tsum_id = r.tsum_id\nwhere r.lot_id = :lot_id and r.tsum_id = :tsum_id\norder by r.slot",
+    { kind: 'table' },
+    { picks: [pick('slot', 'wafer')], limits: { value: 'tsum_value', lcl: 'lsl', ucl: 'usl' } },
+  ),
+  tsum(
+    'card_tsum_trace',
+    'Trace · 지금 웨이퍼',
+    "select to_char(t.ts, 'YYYY-MM-DD HH24:MI:SS.FF3') as ts, t.value, 'STEP ' || t.step as step_nm,\n       case when t.step between i.start_step and i.end_step\n            then 'TSUM ' || i.tsum_id || ' · STEP ' || i.start_step || '~' || i.end_step end as tsum_win\nfrom fdc_trace t join tsum_item i on i.tsum_id = :tsum_id\nwhere t.lot_id = :lot_id and t.slot = :wafer and t.param = :sensor\norder by t.ts",
+    { kind: 'chart', type: 'line', x: 'ts', y: ['value'], phase: 'step_nm', band: 'tsum_win' },
+  ),
+  tsum(
+    'card_tsum_stats',
+    '구간 통계 · 센서별',
+    'select t.param as sensor, count(*) as n, round(avg(t.value), 4) as avg, min(t.value) as min, max(t.value) as max,\n       max(t.value) - min(t.value) as max_min, round(stddev(t.value), 4) as std,\n       round((max(t.ts) - min(t.ts)) * 86400000) as win_ms\nfrom fdc_trace t join tsum_item i on i.tsum_id = :tsum_id\nwhere t.lot_id = :lot_id and t.slot = :wafer and t.step between i.start_step and i.end_step\ngroup by t.param\norder by t.param',
+    { kind: 'table' },
+    { picks: [pick('sensor')] },
+  ),
+  tsum(
+    'card_tsum_ctx',
+    'Chamber Context History',
+    "select to_char(h.ts, 'YYYY-MM-DD HH24:MI:SS.FF3') as ts, h.slot, h.event, h.step, h.detail\nfrom chamber_ctx_hist h\nwhere h.eqp_id = :eqp_id and h.chamber = :chamber and h.lot_id = :lot_id\n  and h.slot between :wafer - 1 and :wafer + 1\norder by h.ts",
+    { kind: 'table' },
+    { picks: [pick('slot', 'wafer')] },
+  ),
+]
+
+const TSUM_PLACE: [string, number, number, number, number][] = [
+  ['card_tsum_items', 0, 0, 2, 1],
+  ['card_tsum_value', 2, 0, 1, 1],
+  ['card_tsum_wafers', 3, 0, 1, 3],
+  ['card_tsum_trace', 0, 1, 3, 2],
+  ['card_tsum_stats', 0, 3, 2, 2],
+  ['card_tsum_ctx', 2, 3, 2, 2],
+]
+
+export const seedTsumBoard: Board = {
+  ...base('board_tsum', ['fdc', 'tsum']),
+  title: 'TSUM 확인 · ETCH-03',
+  cells: TSUM_PLACE.map(([cardId, x, y, w, h]) => ({ cardId, x, y, w, h })),
+  vars: { eqp_id: 'ETCH-03', chamber: 'CH-A', lot_id: 'L2611-07', wafer: '12', tsum_id: 'T01', sensor: 'RF_REF_PWR' },
+  conns: { 'FDC-DEMO': 'conn_fdc_demo' },
+}
+
 // gen.py PLACE — (카드, 열, 줄, 폭, 높이)
 const PLACE: [string, number, number, number, number][] = [
   ['card_sensor_trace', 0, 0, 2, 2],

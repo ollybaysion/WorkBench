@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { db } from './db'
 import type { Command, Runbook, RunbookRun, EnvPreset, Settings, ExportBundle, Connection, Card, Board } from './types'
 import { seedCommands, seedEnvs, seedRunbooks } from './lib/seed'
-import { seedBoardCommands, seedBoards, seedCards, seedConnections, seedFdcBoard, seedFdcCards, seedFdcConnections } from './lib/seedBoard'
+import { seedBoardCommands, seedBoards, seedCards, seedConnections, seedFdcBoard, seedFdcCards, seedFdcConnections, seedTsumBoard, seedTsumCards } from './lib/seedBoard'
 import { now } from './lib/util'
 import { migrateBoards, migrateCards } from './lib/conn'
 
@@ -108,6 +108,20 @@ export const useStore = create<State>((set, get) => ({
         await db.cards.bulkPut(seedFdcCards.filter((_, i) => !cards[i]))
         if (!board) await db.boards.put(seedFdcBoard)
         await db.kv.put({ key: 'seededFdcTrace', value: true })
+      })
+    }
+    // TSUM 확인 작업판: FDC-DEMO 연결을 같이 쓴다. 한 번만 넣고, 같은 id 가 이미 있으면 그대로 둔다
+    if (!(await db.kv.get('seededTsum'))) {
+      await db.transaction('rw', [db.connections, db.cards, db.boards, db.kv], async () => {
+        const [conns, cards, board] = await Promise.all([
+          db.connections.bulkGet(seedFdcConnections.map((c) => c.id)),
+          db.cards.bulkGet(seedTsumCards.map((c) => c.id)),
+          db.boards.get(seedTsumBoard.id),
+        ])
+        await db.connections.bulkPut(seedFdcConnections.filter((_, i) => !conns[i]))
+        await db.cards.bulkPut(seedTsumCards.filter((_, i) => !cards[i]))
+        if (!board) await db.boards.put(seedTsumBoard)
+        await db.kv.put({ key: 'seededTsum', value: true })
       })
     }
     const [commands, runbooks, runs, envs, connections, loadedCards, loadedBoards, s] = await Promise.all([
