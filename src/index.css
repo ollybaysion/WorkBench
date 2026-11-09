@@ -334,7 +334,7 @@ pre.code { background: var(--code-bg); color: var(--code-text); padding: 12px 14
 .qc-conn, .qc-status { font-size: 11px; color: var(--muted); white-space: nowrap; flex: none; }
 .qc-xp { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 0 2px; font-size: 14px; line-height: 1; flex: none; }
 .qc-xp:hover { color: var(--accent); }
-.qc-body { flex: 1; min-height: 0; overflow: hidden; }
+.qc-body { flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden; } /* 열이 많은 표는 카드 안에서도 옆으로 민다 */
 .qc-state { height: 100%; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; padding: 0 6px; }
 .qc-state .note-box { margin: 0; max-width: 100%; overflow: hidden; overflow-wrap: anywhere; font-size: 12px; }
 .qc-foot { display: flex; align-items: center; gap: 8px; height: 18px; font-size: 11px; color: var(--muted); flex: none; white-space: nowrap; min-width: 0; }
