@@ -6,6 +6,7 @@ import { useStore } from '../../store'
 import { connLabel } from '../../lib/conn'
 import ResultTable, { ROW_H_COMPACT } from './ResultTable'
 import Chart from '../chart/Chart'
+import RecordList from './RecordList'
 import type { CardView } from '../../types'
 
 /** 연결 태그 `FDC-L1 · production`. 좁은 카드에서는 환경 이름을 숨긴다(index.css 컨테이너 쿼리) */
@@ -26,8 +27,39 @@ export function QueryStatus({ run }: { run?: QueryState }) {
   return <span className="qc-status">{fmtSec(run.result.elapsedMs)}</span>
 }
 
-/** 상태 셋: 조회 중 · 0 행 · 오류. 그 외에는 표, 그래프 보기면 그래프 */
-export function QueryBody({ run, compact, maxRows, view }: { run?: QueryState; compact?: boolean; maxRows?: number; view?: CardView }) {
+/** 결과를 보는 모양: 그래프 · 표 · 행 카드(행 하나를 카드 하나로) */
+export type ResultMode = 'chart' | 'table' | 'records'
+
+/** 카드 머리 · 서랍이 함께 쓰는 보기 단추. chart 가 false 면 표 · 행 카드 둘만 */
+export function ModeSeg({ mode, chart, onMode, chartType }: { mode: ResultMode; chart: boolean; onMode: (m: ResultMode) => void; chartType?: string }) {
+  const opts: [ResultMode, string, string][] = [
+    ...(chart ? ([['chart', '⌇', `그래프${chartType ? `(${chartType})` : ''}로 보기`]] as [ResultMode, string, string][]) : []),
+    ['table', '▦', '표로 보기'],
+    ['records', '▤', '행 카드로 보기(행 하나를 카드 하나로)'],
+  ]
+  return (
+    <span className="qc-seg" role="group" aria-label="보기">
+      {opts.map(([m, icon, title]) => (
+        <button
+          key={m}
+          type="button"
+          aria-pressed={mode === m}
+          title={title}
+          aria-label={title}
+          onClick={(e) => {
+            e.stopPropagation()
+            onMode(m)
+          }}
+        >
+          {icon}
+        </button>
+      ))}
+    </span>
+  )
+}
+
+/** 상태 셋: 조회 중 · 0 행 · 오류. 그 외에는 표, 그래프 보기면 그래프, 행 카드 보기면 행 카드 */
+export function QueryBody({ run, compact, maxRows, view, records }: { run?: QueryState; compact?: boolean; maxRows?: number; view?: CardView; records?: boolean }) {
   if (!run || run.status === 'loading') return <div className="qc-state">조회 중…</div>
   if (run.status === 'error')
     return (
@@ -37,6 +69,7 @@ export function QueryBody({ run, compact, maxRows, view }: { run?: QueryState; c
     )
   if (run.result.rows.length === 0) return <div className="qc-state">결과 없음</div>
   if (view?.kind === 'chart') return <Chart result={run.result} spec={view} />
+  if (records) return <RecordList result={run.result} step={compact ? 20 : 100} />
   return <ResultTable result={run.result} compact={compact} maxRows={maxRows} />
 }
 
@@ -68,9 +101,9 @@ export default function QueryCardView({ card, conn, run, selected, onOpen }: { c
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
-  // 그래프 카드는 머리의 단추로 표 · 그래프를 오간다(이 화면에서만, 저장하지 않는다)
-  const [asTable, setAsTable] = useState(false)
+  // 머리의 단추로 그래프 · 표 · 행 카드를 오간다(이 화면에서만, 저장하지 않는다)
   const chart = card.view.kind === 'chart'
+  const [mode, setMode] = useState<ResultMode>(chart ? 'chart' : 'table')
   const cls = 'qcard' + (selected ? ' sel' : '') + (run?.status === 'error' ? ' err' : '')
   return (
     <article className={cls} onClick={onOpen}>
@@ -78,32 +111,7 @@ export default function QueryCardView({ card, conn, run, selected, onOpen }: { c
         <span className="qc-title" title={card.title}>
           {card.title}
         </span>
-        {card.view.kind === 'chart' && (
-          <span className="qc-seg" role="group" aria-label="보기">
-            <button
-              type="button"
-              aria-pressed={asTable}
-              title="표로 보기"
-              onClick={(e) => {
-                e.stopPropagation()
-                setAsTable(true)
-              }}
-            >
-              ▦
-            </button>
-            <button
-              type="button"
-              aria-pressed={!asTable}
-              title={`그래프(${card.view.type})로 보기`}
-              onClick={(e) => {
-                e.stopPropagation()
-                setAsTable(false)
-              }}
-            >
-              ⌇
-            </button>
-          </span>
-        )}
+        <ModeSeg mode={mode} chart={chart} onMode={setMode} chartType={card.view.kind === 'chart' ? card.view.type : undefined} />
         <ConnTag conn={conn} name={card.connection} />
         <QueryStatus run={run} />
         <button
@@ -119,8 +127,8 @@ export default function QueryCardView({ card, conn, run, selected, onOpen }: { c
           ⤢
         </button>
       </div>
-      <div className="qc-body" ref={bodyRef}>
-        <QueryBody run={run} compact maxRows={maxRows} view={chart && !asTable ? card.view : undefined} />
+      <div className={'qc-body' + (mode === 'records' ? ' records' : '')} ref={bodyRef}>
+        <QueryBody run={run} compact maxRows={maxRows} view={mode === 'chart' ? card.view : undefined} records={mode === 'records'} />
       </div>
       <div className="qc-foot">
         <QueryFoot run={run} />
