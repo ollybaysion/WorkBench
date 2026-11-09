@@ -393,6 +393,11 @@ pre.code { background: var(--code-bg); color: var(--code-text); padding: 12px 14
 .conn-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .field .check input { width: auto; padding: 0; flex: none; }
 .field .check { color: var(--text); }
+.tres { font-size: 12px; padding: 5px 10px; border-radius: 7px; background: var(--surface-2); color: var(--muted); overflow-wrap: anywhere; flex: 1 1 260px; min-width: 0; }
+.tres.ok { background: var(--ok-soft); color: var(--ok); font-weight: 600; }
+.tres.bad { background: var(--danger-soft); color: var(--danger); }
+.chip.warn { background: var(--warn-soft); color: var(--warn); }
+.cband .fake { margin-left: auto; text-decoration: none; }
 .conn-str { font-size: 12px; padding: 6px 9px; border-radius: 7px; background: var(--surface-2); color: var(--text); overflow-wrap: anywhere; }
 @media (max-width: 760px) {
   .conn-grid { grid-template-columns: minmax(0, 1fr); }

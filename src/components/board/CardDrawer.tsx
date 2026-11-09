@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { Card, CommandCard, Connection, QueryCard } from '../../types'
-import { ROW_CAP, type QueryState } from '../../lib/runner'
+import type { QueryState } from '../../lib/runner'
 import { extractBinds } from '../../lib/sql'
 import { render } from '../../lib/template'
 import { fmtSec, fmtTime } from '../../lib/util'
@@ -104,7 +104,11 @@ function QueryDrawer({ card, run, boardVars, connName }: { card: QueryCard; run?
             {ok && ` · ${fmtSec(ok.elapsedMs)} · ${ok.columns.length} 열`}
           </span>
           <span className="sp" />
-          {ok?.truncated && <span className="trunc">⚠ {ROW_CAP} 행에서 잘림</span>}
+          {ok?.truncated && (
+            <span className="trunc" title={ok.note}>
+              ⚠ {ok.rows.length} 행에서 잘림
+            </span>
+          )}
         </div>
         <div className="tbox drawer-table">
           <QueryBody run={run} />
