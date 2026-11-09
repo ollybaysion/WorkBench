@@ -13,7 +13,7 @@ const THEME_LABEL: Record<Theme, string> = { system: '시스템', light: '라이
 export default function Layout() {
   const commands = useStore((s) => s.commands.length)
   const runbooks = useStore((s) => s.runbooks.length)
-  const boards = useStore((s) => s.boards.length)
+  const boards = useStore((s) => s.boards)
   const envs = useStore((s) => s.envs)
   const settings = useStore((s) => s.settings)
   const setSettings = useStore((s) => s.setSettings)
@@ -38,7 +38,16 @@ export default function Layout() {
           </button>
         </div>
         <NavLink to="/" end className={cls}>🏠 대시보드</NavLink>
-        <NavLink to="/board" className={cls}>📊 작업대 <span className="n">{boards}</span></NavLink>
+        <NavLink to="/board" end className={cls}>📊 작업대 <span className="n">{boards.length}</span></NavLink>
+        {/* 작업판 목록: 눌러서 바로 연다. 작업대 화면 위 선택 상자와 같은 가나다순 */}
+        {[...boards]
+          .sort((a, b) => a.title.localeCompare(b.title, 'ko'))
+          .map((b) => (
+            <NavLink key={b.id} to={`/board/${b.id}`} className={(p) => cls(p) + ' sub'} title={b.title}>
+              <span className="sub-t">{b.title}</span>
+              <span className="n">{b.cells.length}</span>
+            </NavLink>
+          ))}
         <NavLink to="/akg" className={cls}>📖 AKG 문서</NavLink>
         <NavLink to="/commands" className={cls}>⌘ 명령어 <span className="n">{commands}</span></NavLink>
         <NavLink to="/runbooks" className={cls}>🔁 런북 <span className="n">{runbooks}</span></NavLink>
