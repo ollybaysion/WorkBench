@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { Card, CommandCard, Connection, QueryCard } from '../../types'
 import type { QueryState } from '../../lib/runner'
@@ -24,9 +24,15 @@ interface Props {
   onRerun: () => void
 }
 
-/** 오른쪽 서랍. 폭 min(680px, 100vw), 전체 높이. 배경 누름 · Esc 로 닫힌다 */
+/** 카드 크게 보기. 화면 전체를 덮고, 고른 카드 자리에서 커지며 열린다. ✕ · Esc 로 닫힌다 */
 export default function CardDrawer({ card, conn, run, boardVars, checks, onChecks, onClose, onRerun }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null)
+  const boxRef = useRef<HTMLElement>(null)
+  // 커지는 애니메이션의 기준점을 작업판에서 고른 카드의 가운데에 둔다
+  useLayoutEffect(() => {
+    const r = document.querySelector('.qcard.sel')?.getBoundingClientRect()
+    if (r && boxRef.current) boxRef.current.style.transformOrigin = `${r.left + r.width / 2}px ${r.top + r.height / 2}px`
+  }, [])
   useEffect(() => {
     closeRef.current?.focus()
     const onKey = (e: KeyboardEvent) => {
@@ -38,35 +44,32 @@ export default function CardDrawer({ card, conn, run, boardVars, checks, onCheck
   const cmd = useStore((s) => (card.kind === 'command' ? s.commands.find((c) => c.id === card.commandId) : undefined))
 
   return (
-    <>
-      <div className="drawer-bg" onClick={onClose} />
-      <aside className="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
-        <div className="drawer-head">
-          <h3 id="drawer-title" title={card.title}>
-            {card.title}
-          </h3>
-          {card.kind === 'query' ? (
-            <>
-              {card.view.kind === 'chart' && <span className="pill gray">{card.view.type}</span>}
-              <ConnTag conn={conn} name={card.connection} />
-              <button type="button" className="btn small" onClick={onRerun} disabled={run?.status === 'loading'}>
-                ↻ 다시 조회
-              </button>
-            </>
-          ) : (
-            cmd && <span className={`pill ${RISK_PILL[cmd.risk]}`}>{RISK_LABEL[cmd.risk]}</span>
-          )}
-          <button ref={closeRef} type="button" className="btn small ghost" aria-label="닫기" title="닫기 (Esc)" onClick={onClose}>
-            ✕
-          </button>
-        </div>
+    <aside ref={boxRef} className="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+      <div className="drawer-head">
+        <h3 id="drawer-title" title={card.title}>
+          {card.title}
+        </h3>
         {card.kind === 'query' ? (
-          <QueryDrawer card={card} run={run} boardVars={boardVars} connName={conn?.name} onRerun={onRerun} />
+          <>
+            {card.view.kind === 'chart' && <span className="pill gray">{card.view.type}</span>}
+            <ConnTag conn={conn} name={card.connection} />
+            <button type="button" className="btn small" onClick={onRerun} disabled={run?.status === 'loading'}>
+              ↻ 다시 조회
+            </button>
+          </>
         ) : (
-          <CommandDrawer card={card} boardVars={boardVars} checks={checks} onChecks={onChecks} />
+          cmd && <span className={`pill ${RISK_PILL[cmd.risk]}`}>{RISK_LABEL[cmd.risk]}</span>
         )}
-      </aside>
-    </>
+        <button ref={closeRef} type="button" className="btn small ghost" aria-label="닫기" title="닫기 (Esc)" onClick={onClose}>
+          ✕
+        </button>
+      </div>
+      {card.kind === 'query' ? (
+        <QueryDrawer card={card} run={run} boardVars={boardVars} connName={conn?.name} onRerun={onRerun} />
+      ) : (
+        <CommandDrawer card={card} boardVars={boardVars} checks={checks} onChecks={onChecks} />
+      )}
+    </aside>
   )
 }
 
