@@ -4,6 +4,7 @@ import { prepare, type ChartSpec } from '../../lib/chartData'
 import { useSize } from './useSize'
 import LineChart from './LineChart'
 import { BarChart, BoxChart, HeatmapChart } from './SvgCharts'
+import StatChart from './StatChart'
 
 /** 카드 · 서랍 · 폼 미리보기가 함께 쓰는 그래프. 부모가 준 칸을 꽉 채운다 */
 export default function Chart({ result, spec }: { result: QueryResult; spec: ChartSpec }) {
@@ -27,6 +28,7 @@ export default function Chart({ result, spec }: { result: QueryResult; spec: Cha
             {prepared.kind === 'bars' && <BarChart data={prepared.data} stacked={prepared.stacked} width={w} height={ch} />}
             {prepared.kind === 'heatmap' && <HeatmapChart {...prepared} width={w} height={ch} />}
             {prepared.kind === 'box' && <BoxChart groups={prepared.groups} yName={prepared.yName} width={w} height={ch} />}
+            {prepared.kind === 'stat' && <StatChart tiles={prepared.tiles} width={w} height={ch} />}
             {note && <div className="ch-note">{note}</div>}
           </>
         )

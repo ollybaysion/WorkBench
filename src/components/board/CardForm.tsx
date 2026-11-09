@@ -21,6 +21,7 @@ const CHART_TYPES: [ChartType, string][] = [
   ['histogram', '히스토그램'],
   ['heatmap', '히트맵'],
   ['box', '상자 그림'],
+  ['stat', '숫자 타일'],
 ]
 
 /** 폼이 고치는 값. 조회 · 명령 두 모양을 함께 들고 있어서 종류를 바꿔도 입력이 남는다 */
