@@ -1,13 +1,14 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { Card, CommandCard, Connection, QueryCard } from '../../types'
 import type { QueryState } from '../../lib/runner'
-import { extractBinds } from '../../lib/sql'
+import { bindSpans, extractBinds, fillBinds } from '../../lib/sql'
 import { render } from '../../lib/template'
 import { fmtSec, fmtTime } from '../../lib/util'
 import { useStore } from '../../store'
 import { RISK_LABEL, RISK_PILL } from '../vars'
-import { ConnTag, QueryBody } from './QueryCardView'
+import { ConnTag, ModeSeg, QueryBody, type ResultMode } from './QueryCardView'
+import { copyWithToast, resultTsv } from './copy'
 import Chart from '../chart/Chart'
 import { copyCommand, resolveCommandVars, varsOf } from './command'
 
@@ -68,16 +69,23 @@ export default function CardDrawer({ card, conn, run, boardVars, checks, onCheck
   )
 }
 
-const BIND_SPLIT = /(:[A-Za-z_][A-Za-z0-9_]*)/g
-
-/** SQL 의 `:이름` 을 강조. 리터럴 안 등 추출되지 않은 것은 그대로 */
-function highlightBinds(sql: string, binds: string[]): ReactNode[] {
-  return sql.split(BIND_SPLIT).map((part, i) => (part.startsWith(':') && binds.includes(part.slice(1)) ? <b key={i} className="bind">{part}</b> : part))
+/** SQL 의 `:이름` 바인드 자리를 강조. 주석 · 문자열 안은 그대로 */
+function highlightBinds(sql: string): ReactNode[] {
+  const out: ReactNode[] = []
+  let at = 0
+  for (const s of bindSpans(sql)) {
+    out.push(sql.slice(at, s.start), <b key={s.start} className="bind">{sql.slice(s.start, s.end)}</b>)
+    at = s.end
+  }
+  out.push(sql.slice(at))
+  return out
 }
 
 function QueryDrawer({ card, run, boardVars, connName }: { card: QueryCard; run?: QueryState; boardVars: Record<string, string>; connName?: string }) {
   const binds = extractBinds(card.sql)
   const ok = run?.status === 'ok' ? run.result : undefined
+  // 열이 많으면 행 카드로 먼저 연다
+  const [mode, setMode] = useState<ResultMode>(() => (ok && ok.columns.length > 12 ? 'records' : 'table'))
   let foot: ReactNode
   if (!run || run.status === 'loading') foot = <span>조회 중…</span>
   else if (run.status === 'error') foot = <span className="err">오류 · 마지막 조회 {fmtTime(run.at)}</span>
@@ -116,14 +124,34 @@ function QueryDrawer({ card, run, boardVars, connName }: { card: QueryCard; run?
             <Chart result={ok} spec={card.view} />
           </div>
         )}
-        <div className="tbox drawer-table">
-          <QueryBody run={run} />
+        <div className="btn-row drawer-tbar">
+          <ModeSeg mode={mode} chart={false} onMode={setMode} />
+          <span className="small muted">칸을 누르면 값, 열 이름을 누르면 열 이름이 복사됩니다</span>
+          <span className="sp" />
+          {ok && ok.rows.length > 0 && (
+            <button type="button" className="btn small" onClick={() => void copyWithToast(resultTsv(ok), `${ok.rows.length} 행(TSV)`)} title="머리 행과 모든 행을 탭으로 나눠 복사(엑셀에 바로 붙습니다)">
+              ⧉ 표 복사
+            </button>
+          )}
+        </div>
+        <div className={'tbox drawer-table' + (mode === 'records' ? ' records' : '')}>
+          <QueryBody run={run} records={mode === 'records'} />
         </div>
         <details className="sqlbox" open>
           <summary>
             <b>SQL</b> <span className="muted">바인드 {binds.length}</span>
           </summary>
-          <pre className="code">{highlightBinds(card.sql, binds)}</pre>
+          <pre className="code">{highlightBinds(card.sql)}</pre>
+          <div className="btn-row">
+            <button type="button" className="btn small" onClick={() => void copyWithToast(card.sql, 'SQL')}>
+              ⧉ SQL 복사
+            </button>
+            {binds.length > 0 && (
+              <button type="button" className="btn small" onClick={() => void copyWithToast(fillBinds(card.sql, boardVars), '값 넣은 SQL')} title="변수 띠 값을 바인드 자리에 넣은 SQL. 빈 값은 NULL">
+                ⧉ 값 넣어 복사
+              </button>
+            )}
+          </div>
           {binds.length > 0 && (
             <div className="tbox">
               <table className="rtable compact">

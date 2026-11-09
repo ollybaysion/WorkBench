@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import type { QueryResult } from '../../types'
+import { cellText, copyOnClick } from './copy'
 
 /** 행 높이(px). index.css 의 .rtable 과 같다 */
 export const ROW_H = 26
@@ -25,6 +26,7 @@ function colWidths(result: QueryResult, compact: boolean): number[] {
 /**
  * 결과 표. 머리 행 sticky, 숫자 오른쪽 정렬, NULL 은 흐리게. maxRows 가 있으면 그만큼만 그린다(카드 안).
  * 열 너비의 합이 칸보다 넓으면 표가 넓어지고, 감싼 상자가 가로로 스크롤된다.
+ * 머리 칸을 누르면 열 이름, 칸을 누르면 값이 복사된다.
  */
 export default function ResultTable({ result, compact = false, maxRows }: { result: QueryResult; compact?: boolean; maxRows?: number }) {
   const num = result.columns.map((c) => c.type === 'number')
@@ -42,7 +44,7 @@ export default function ResultTable({ result, compact = false, maxRows }: { resu
         <tr>
           {/* JOIN 의 SELECT * 는 열 이름이 겹칠 수 있다. key 는 자리 번호로 */}
           {result.columns.map((c, i) => (
-            <th key={i} className={num[i] ? 'num' : undefined} title={c.name}>
+            <th key={i} className={'copyable' + (num[i] ? ' num' : '')} title={`${c.name} · 눌러서 열 이름 복사`} onClick={copyOnClick(c.name, '열 이름')}>
               {c.name}
             </th>
           ))}
@@ -52,7 +54,7 @@ export default function ResultTable({ result, compact = false, maxRows }: { resu
         {rows.map((row, ri) => (
           <tr key={ri}>
             {row.map((v, ci) => (
-              <td key={ci} className={num[ci] ? 'num' : undefined} title={v === null ? undefined : String(v)}>
+              <td key={ci} className={'copyable' + (num[ci] ? ' num' : '')} title={v === null ? '눌러서 복사 (NULL)' : `${cellText(v)} · 눌러서 복사`} onClick={copyOnClick(cellText(v), '값')}>
                 {v === null ? <span className="null muted">NULL</span> : String(v)}
               </td>
             ))}
