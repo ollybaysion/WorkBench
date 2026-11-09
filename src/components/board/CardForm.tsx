@@ -145,7 +145,6 @@ export default function CardForm({ card, isNew, size, boardVars, boardConns, onS
   const previewView: CardView | undefined =
     d.view === 'chart' ? { kind: 'chart', type: d.chartType, x: d.x.trim(), y: splitCols(d.y), ...(series ? { series } : {}) } : undefined
   const cmd = d.kind === 'command' ? commands.find((c) => c.id === d.commandId) : undefined
-  const envName = (envId: string) => envs.find((e) => e.id === envId)?.name ?? envId
   const previewConn = d.kind === 'query' ? resolveConn(d.connection, { conns: boardConns }, connections, envs) : undefined
 
   const runPreview = () => {
@@ -221,9 +220,9 @@ export default function CardForm({ card, isNew, size, boardVars, boardConns, onS
               ))}
             </select>
             <span className="small muted">
-              {previewConn
-                ? `이 작업판에서는 ${envName(previewConn.envId)} · ${previewConn.host} 에 붙습니다. 환경은 작업대의 연결 띠에서 바꿉니다.`
-                : '환경은 작업대의 연결 띠에서 고릅니다.'}
+              {previewConn?.alias
+                ? `이 작업판에서는 agent-db ${previewConn.alias} 로 조회합니다. alias 는 작업대의 연결 띠에서 바꿉니다.`
+                : '이 작업판에서는 가짜 결과를 씁니다. 설정 › DB 연결에서 alias 에 이 이름을 붙이세요.'}
             </span>
           </label>
           <label className="field">
