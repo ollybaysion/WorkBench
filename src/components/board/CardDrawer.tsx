@@ -8,6 +8,7 @@ import { fmtSec, fmtTime } from '../../lib/util'
 import { useStore } from '../../store'
 import { RISK_LABEL, RISK_PILL } from '../vars'
 import { ConnTag, QueryBody } from './QueryCardView'
+import Chart from '../chart/Chart'
 import { copyCommand, resolveCommandVars, varsOf } from './command'
 
 interface Props {
@@ -110,6 +111,11 @@ function QueryDrawer({ card, run, boardVars, connName }: { card: QueryCard; run?
             </span>
           )}
         </div>
+        {card.view.kind === 'chart' && ok && ok.rows.length > 0 && (
+          <div className="drawer-chart">
+            <Chart result={ok} spec={card.view} />
+          </div>
+        )}
         <div className="tbox drawer-table">
           <QueryBody run={run} />
         </div>

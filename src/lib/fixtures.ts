@@ -43,6 +43,16 @@ for (let i = 0; i < 60; i++) {
   traceRows.push([`14:${pad(i)}:00`, 'TEMP', TEMP[i]], [`14:${pad(i)}:00`, 'PRESS', PRESS[i]])
 }
 
+// 웨이퍼 맵: 지름 15 다이 원 안. 오른쪽 위 가장자리에 결함이 몰린다
+const waferRows: Cell[][] = []
+for (let x = 0; x < 15; x++)
+  for (let y = 0; y < 15; y++) {
+    const dx = x - 7
+    const dy = y - 7
+    if (dx * dx + dy * dy > 52) continue
+    const hot = Math.max(0, 6 - Math.hypot(x - 11.5, y - 11))
+    waferRows.push([x, y, Math.round(hot * 1.6 + ((x * 7 + y * 13) % 5 === 0 ? 1 : 0))])
+  }
 const LOTS: Cell[][] = [
   ['14:00', 12],
   ['14:10', 11],
@@ -92,7 +102,7 @@ export const fixtures: Record<string, Fixture> = {
     ],
   ),
   card_alarm_dist: ok(1600, [col('alarm_cd'), col('cnt', 'number'), col('pct', 'number')], DIST),
-  card_wafer_map: ok(300, [col('die_x', 'number'), col('die_y', 'number'), col('defects', 'number')], []),
+  card_wafer_map: ok(300, [col('die_x', 'number'), col('die_y', 'number'), col('defects', 'number')], waferRows),
   card_sess_count: { delayMs: 300, error: 'ORA-12170: TNS:Connect timeout occurred' },
   card_log_err: ok(8000, [col('ts'), col('level'), col('message')], logRows), // 조회 중 상태 확인용
 }

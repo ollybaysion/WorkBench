@@ -6,6 +6,8 @@
   --code-bg: #1e2430; --code-text: #e6edf7;
   --shadow: 0 1px 2px rgba(16,24,40,.06), 0 4px 14px rgba(16,24,40,.06);
   --radius: 12px;
+  /* 그래프 범주 색(정해진 순서). 라이트 · 다크 각각 색약 구분 검사를 통과한 값 */
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100; --series-5: #e87ba4; --series-6: #008300; --series-7: #6250d6; --series-8: #e34948;
   --sidebar: 230px;
 }
 @media (prefers-color-scheme: dark) {
@@ -16,6 +18,7 @@
     --danger: #f06a6a; --danger-soft: #3d1c1c; --purple: #b08cf5; --purple-soft: #2b2140;
     --code-bg: #0b0e14; --code-text: #dfe7f3;
     --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.35);
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500; --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
   }
 }
 :root[data-theme="dark"] {
@@ -25,6 +28,7 @@
   --danger: #f06a6a; --danger-soft: #3d1c1c; --purple: #b08cf5; --purple-soft: #2b2140;
   --code-bg: #0b0e14; --code-text: #dfe7f3;
   --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.35);
+  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500; --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
 }
 
 * { box-sizing: border-box; }
@@ -438,6 +442,32 @@ pre.code { background: var(--code-bg); color: var(--code-text); padding: 12px 14
 .cf-head h4 { margin: 0; }
 .cf-chart, .cf-size { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .cf-preview { height: 200px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+.cf-preview.chart { height: 240px; overflow: hidden; padding: 6px 4px 0; }
+
+/* ===== 그래프 ===== */
+.chart { position: relative; width: 100%; height: 100%; min-height: 0; min-width: 0; overflow: hidden; }
+.ch-lines, .ch-svg { position: relative; display: flex; flex-direction: column; }
+.ch-panel { position: relative; }
+.ch-host .u-wrap, .ch-host canvas { display: block; }
+.ch-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; height: 18px; overflow: hidden; align-items: center; font-size: 11px; color: var(--muted); padding-left: 52px; }
+.ch-legend span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.ch-legend i { width: 12px; height: 3px; border-radius: 2px; flex: none; }
+.ch-ramp { width: 72px; height: 8px; border-radius: 3px; background: linear-gradient(90deg, color-mix(in srgb, var(--series-1) 12%, var(--surface)), var(--series-1)); }
+.ch-axis text { font: 11px "JetBrains Mono", Consolas, monospace; fill: var(--muted); }
+.ch-grid { stroke: var(--border); stroke-width: 1; }
+.ch-base { stroke: var(--muted); stroke-width: 1; opacity: .6; }
+.ch-median { stroke: var(--text); stroke-width: 2; }
+.ch-note { font-size: 11px; color: var(--muted); padding: 2px 0 0 52px; height: 16px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ch-tip { position: absolute; z-index: 5; pointer-events: none; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); border-radius: 8px; padding: 6px 9px; font-size: 11.5px; color: var(--text); display: flex; flex-direction: column; gap: 2px; min-width: 120px; max-width: 260px; }
+.ch-tip b { font-family: "JetBrains Mono", Consolas, monospace; font-size: 11px; color: var(--muted); font-weight: 600; }
+.ch-tip span { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.ch-tip i { width: 10px; height: 3px; border-radius: 2px; flex: none; }
+.ch-tip em { font-style: normal; font-family: "JetBrains Mono", Consolas, monospace; margin-left: auto; padding-left: 10px; font-weight: 600; }
+.qc-seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; flex: none; }
+.qc-seg button { border: 0; background: var(--surface); color: var(--muted); font-size: 12px; line-height: 1; padding: 2px 6px; cursor: pointer; }
+.qc-seg button + button { border-left: 1px solid var(--border); }
+.qc-seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.drawer-chart { height: 270px; flex: none; }
 .cf-err { font-size: 12px; color: var(--danger); }
 .bedit-form pre.code { font-size: 12px; }
 @media (max-width: 1100px) {
