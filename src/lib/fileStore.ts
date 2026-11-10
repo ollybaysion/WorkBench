@@ -112,6 +112,12 @@ export async function fileStatus(): Promise<FileStatus> {
   }
 }
 
+/** 파일 저장소의 모든 테이블을 읽는다. 앞서 보낸 쓰기가 끝난 뒤에 읽는다 */
+export async function fileReadAll(): Promise<{ tables: Record<FileTable, Row[]>; errors: string[] }> {
+  await idle()
+  return call('GET', 'all')
+}
+
 const keyOf = (t: FileTable, r: Row) => String(t === 'kv' ? r.key : r.id)
 const newer = (a: Row, b: Row) => typeof a.updatedAt === 'string' && typeof b.updatedAt === 'string' && a.updatedAt > b.updatedAt
 

@@ -5,7 +5,7 @@ import { seedCommands, seedEnvs, seedRunbooks } from './lib/seed'
 import { seedBoardCommands, seedBoards, seedCards, seedConnections, seedFdcBoard, seedFdcCards, seedFdcConnections, seedTsumBoard, seedTsumCards } from './lib/seedBoard'
 import { now, uid } from './lib/util'
 import { migrateConns } from './lib/conn'
-import { FILE_TABLES, LOCAL_KV, attachFiles, onFileError, withMirrorPaused, type FileTable } from './lib/fileStore'
+import { FILE_TABLES, LOCAL_KV, attachFiles, fileReadAll, onFileError, withMirrorPaused, type FileTable } from './lib/fileStore'
 
 const defaultSettings: Settings = { theme: 'system', userName: '', activeEnvId: 'env_prod' }
 
@@ -25,6 +25,8 @@ interface State {
   fileDir?: string
 
   init: () => Promise<void>
+  /** 다른 프로그램(MCP 서버 · 편집기)이 바꾼 테이블을 파일에서 다시 읽는다 */
+  reloadTables: (tables: string[]) => Promise<void>
   showToast: (msg: string) => void
   setPalette: (open: boolean) => void
   setSettings: (patch: Partial<Settings>) => Promise<void>
@@ -187,6 +189,33 @@ export const useStore = create<State>((set, get) => ({
     })
   },
 
+  reloadTables: async (names) => {
+    if (!get().ready || !get().fileDir) return
+    // kv(시드 표시)는 앱을 켤 때만 읽는다
+    const tables = FILE_TABLES.filter((t) => t !== 'kv' && names.includes(t))
+    if (!tables.length) return
+    const { tables: rows } = await fileReadAll()
+    await withMirrorPaused(() =>
+      db.transaction(
+        'rw',
+        tables.map((t) => db.table(t)),
+        async () => {
+          for (const t of tables) {
+            await db.table(t).clear()
+            await db.table(t).bulkPut(rows[t])
+          }
+        },
+      ),
+    )
+    const patch: Partial<State> = {}
+    for (const t of tables) {
+      if (t === 'runs') patch.runs = [...(rows.runs as unknown as RunbookRun[])].sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1))
+      else if (t === 'envs') patch.envs = rows.envs as unknown as EnvPreset[]
+      else Object.assign(patch, { [t]: sortByUpdated(rows[t] as unknown as { updatedAt: string }[]) })
+    }
+    set(patch)
+  },
+
   showToast: (msg) => {
     set({ toast: msg })
     if (toastTimer) clearTimeout(toastTimer)
@@ -343,3 +372,8 @@ export const useStore = create<State>((set, get) => ({
     await get().init()
   },
 }))
+
+// 다른 프로그램이 저장 폴더의 파일을 바꾸면 개발 서버가 알린다(server/fileStore.ts)
+if (import.meta.hot) {
+  import.meta.hot.on('workbench:files', (d: { tables: string[] }) => void useStore.getState().reloadTables(d.tables))
+}
