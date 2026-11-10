@@ -217,7 +217,7 @@ function BoardView({ board }: { board: Board }) {
         {queryCards.length > 0 && <ConnBand conn={conn} onPick={pickConn} />}
         <VarBand names={bindNames} vars={board.vars} onSave={saveVars} picked={picked} onTouch={touchVar} />
       </div>
-      <BoardGrid cells={cells} connOf={connOf} runs={runs} stale={stale} onRun={runCard} boardVars={board.vars} checks={checks} onChecks={setCardChecks} selectedId={selectedId} onOpen={open} onPick={pickVars} />
+      <BoardGrid cells={cells} runs={runs} stale={stale} onRun={runCard} boardVars={board.vars} checks={checks} onChecks={setCardChecks} selectedId={selectedId} onOpen={open} onPick={pickVars} />
       {selected && (
         <CardDrawer
           card={selected}

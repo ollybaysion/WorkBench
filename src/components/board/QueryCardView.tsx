@@ -115,7 +115,6 @@ export function QueryFoot({ run, hint }: { run?: QueryState; hint?: string }) {
 
 export default function QueryCardView({
   card,
-  conn,
   run,
   stale,
   selected,
@@ -125,7 +124,6 @@ export default function QueryCardView({
   onPick,
 }: {
   card: QueryCard
-  conn?: Connection
   run?: QueryState
   stale: boolean
   selected: boolean
@@ -156,7 +154,6 @@ export default function QueryCardView({
           {card.title}
         </span>
         <ModeSeg mode={mode} chart={chart} onMode={setMode} chartType={card.view.kind === 'chart' ? card.view.type : undefined} />
-        <ConnTag conn={conn} />
         <QueryStatus run={run} />
         <button
           type="button"
