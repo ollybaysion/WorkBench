@@ -112,7 +112,7 @@ export type CardView =
       x: string
       y: string[]
       series?: string
-      /** 겹침 모드: 이 변수 값과 이름이 같은 시리즈만 진하게, 나머지는 회색으로 깐다(선 그래프) */
+      /** 겹침 모드: 이 변수 값과 이름이 같은 시리즈만 진하게, 나머지는 제 색으로 옅게 깐다(선 그래프) */
       focus?: string
       /** 구간 열(STEP 같은). 값이 바뀌는 x 에 세로 선과 구간 이름을 그린다(선 그래프) */
       phase?: string

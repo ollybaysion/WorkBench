@@ -28,7 +28,7 @@ export interface Series {
   name: string
   slot: number // 0 부터. 처음 나온 순서로 정해서, 거르거나 접어도 색이 바뀌지 않는다
   values: (number | null)[]
-  /** 겹침 모드의 회색 시리즈 */
+  /** 겹침 모드의 나머지 시리즈(옅게 그린다) */
   muted?: boolean
 }
 
@@ -42,7 +42,7 @@ export interface LineExtras {
   over?: { from: number; to: number }[]
   /** 가장 많이 넘은 점. width 는 넘은 x 폭의 합(x 간격 × 넘은 점 수) */
   peak?: { x: number; v: number; limit: number; side: 'ucl' | 'lcl'; width: number }
-  /** 겹침 모드: 고른 변수 · 값 · 그 값의 시리즈가 있는지 · 회색 시리즈 수 */
+  /** 겹침 모드: 고른 변수 · 값 · 그 값의 시리즈가 있는지 · 나머지 시리즈 수 */
   focus?: { var: string; value: string; found: boolean; others: number }
 }
 export interface XY {
@@ -341,7 +341,7 @@ export function prepare(result: QueryResult, spec: ChartSpec, opts: PrepareOpts 
             ? `시리즈 ${all.series.length} 개 중 앞 ${OVERLAY_MAX} 개만 그립니다`
             : hit
               ? undefined
-              : `${spec.focus} = ${value || '(비어 있음)'} 인 시리즈가 없어 모두 회색으로 그립니다`
+              : `${spec.focus} = ${value || '(비어 있음)'} 인 시리즈가 없어 모두 옅게 그립니다`
         return { kind: 'lines', type: spec.type, panels: [{ data: { ...base, series }, extras: { ...extras(hit ? [hit] : shown), focus } }], note }
       }
       // 시리즈가 넷 이하면 위아래로 나눠 그린다(축 하나에 단위가 다른 값을 겹치지 않는다)

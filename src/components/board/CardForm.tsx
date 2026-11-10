@@ -308,7 +308,7 @@ export default function CardForm({ card, isNew, size, boardVars, boardConn, onSa
                   <label className="field">
                     겹침 변수 (선택)
                     <input className="mono" value={d.focus} onChange={(e) => set({ focus: e.target.value })} placeholder="wafer" spellCheck={false} />
-                    <span className="small muted">이 변수 값과 이름이 같은 시리즈만 진하게, 나머지는 회색으로 깝니다.</span>
+                    <span className="small muted">이 변수 값과 이름이 같은 시리즈만 진하게, 나머지는 제 색으로 옅게 깝니다.</span>
                   </label>
                   <label className="field">
                     구간 열 (선택)
