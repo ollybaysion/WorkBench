@@ -10,6 +10,7 @@ import SettingsTabs from '../components/SettingsTabs'
 
 export default function SettingsPage() {
   const settings = useStore((s) => s.settings)
+  const fileDir = useStore((s) => s.fileDir)
   const setSettings = useStore((s) => s.setSettings)
   const envs = useStore((s) => s.envs)
   const importBundle = useStore((s) => s.importBundle)
@@ -82,6 +83,8 @@ export default function SettingsPage() {
           <div className="small muted">
             현재 데이터: 작업대 {counts.b} · 명령 {counts.c} · 런북 {counts.r}
             <br />
+            저장 위치: {fileDir ? <code>{fileDir}</code> : '이 브라우저(IndexedDB)'}
+            <br />
             마지막 백업: {settings.lastBackupAt ? `${fmtDate(settings.lastBackupAt)} (${relTime(settings.lastBackupAt)})` : '없음'}
           </div>
           <div className="btn-row">
@@ -111,8 +114,9 @@ export default function SettingsPage() {
           <div className="note-box">
             <b>팀 공유 방법</b>
             <br />
-            서버가 없으므로 데이터는 각자의 브라우저(IndexedDB)에만 저장됩니다. 팀과 공유하려면 <b>JSON 내보내기</b>로 받은 파일을 이 저장소의{' '}
-            <code>data/</code> 폴더에 커밋하고, 팀원은 파일을 받아 <b>JSON 가져오기 (병합)</b>를 실행하세요. 변경 이력은 Git이 관리합니다.
+            <code>npm run dev</code> 로 켜면 작업판 · 카드 · 명령어 · 런북 · 연결 · 환경 프리셋을 저장 폴더에 항목마다 JSON 파일로 저장합니다(기본{' '}
+            <code>~/.workbench/data</code>, <code>WORKBENCH_DATA</code> 로 바꿈). 설정과 AKG 읽기 토큰은 이 브라우저에만 둡니다. 팀과 공유하려면{' '}
+            <b>JSON 내보내기</b>로 받은 파일을 넘기고, 팀원은 <b>JSON 가져오기 (병합)</b>를 실행하세요.
           </div>
           <div className="note-box danger">
             <div className="btn-row">

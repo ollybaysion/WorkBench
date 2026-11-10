@@ -3,7 +3,7 @@
 이 PC 에서 돌아가는 팀 운영 · 자동화 도구.
 
 운영 명령을 한곳에 정리하고, 반복 업무를 **런북(워크플로우)** 으로 묶어 단계마다 자동화 도구(명령 복사, 템플릿, 체크리스트, 타이머, 링크)를 끼워 넣는 React 단일 페이지 앱입니다.
-데이터는 브라우저 IndexedDB에 저장되고, JSON 내보내기/가져오기로 백업과 공유를 합니다.
+`npm run dev` 로 켜면 데이터를 디스크의 JSON 파일(기본 `~/.workbench/data`)에 저장합니다. JSON 내보내기/가져오기로 백업과 공유를 합니다.
 작업대 카드의 Oracle 조회는 `npm run dev` 가 띄우는 agent-db 가 맡습니다.
 
 ## 주요 기능
@@ -67,7 +67,13 @@ npm run lint
 
 ## 데이터 저장 · 백업 · 팀 공유
 
-- **저장 위치**: 브라우저의 IndexedDB(`workbench` DB). 서버로는 아무것도 보내지 않습니다. 브라우저 데이터를 지우면 함께 지워지므로 정기적으로 백업하세요.
+- **저장 위치**: `npm run dev` · `npm run preview` 로 켜면 개발 서버가 저장 폴더에 항목마다 JSON 파일 하나를 씁니다(`server/fileStore.ts`).
+  - 폴더: 기본 `~/.workbench/data`. 환경 변수 `WORKBENCH_DATA` 로 바꿉니다. 서버를 켤 때 터미널에 `[file-store] 저장 폴더 …` 로 보입니다.
+  - 모양: `<저장 폴더>/<boards|cards|commands|runbooks|runs|connections|envs|kv>/<id>.json`
+  - 앱을 켤 때 파일을 읽습니다. 파일을 직접 고친 뒤 새로고침하면 화면에 반영됩니다. 브라우저 · 주소가 달라도 같은 파일을 봅니다.
+  - 설정과 AKG 읽기 토큰은 브라우저(IndexedDB)에만 둡니다.
+  - 파일에 쓰지 못한 변경(서버가 꺼졌을 때 등)은 다음에 켤 때 파일에 합칩니다. `updatedAt` 이 더 새로운 쪽을 남깁니다. 그동안 지운 항목은 파일에 남아 다시 보입니다.
+  - `dist/index.html` 을 `file://` 로 열거나 GitHub Pages 에서는 개발 서버가 없으므로 브라우저의 IndexedDB(`workbench` DB)에만 저장합니다.
 - **백업**: 사이드바 하단 또는 설정의 **JSON 내보내기**를 누르면 `workbench-backup-YYYY-MM-DD.json`이 내려받아지고 마지막 백업 시각이 기록됩니다. 대시보드에서 백업 상태를 확인할 수 있습니다.
 - **복원 / 가져오기**: 설정 → **JSON 가져오기**
   - *병합*: 같은 ID는 파일 내용으로 덮어쓰고 나머지는 유지합니다.

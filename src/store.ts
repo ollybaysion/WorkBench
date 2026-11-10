@@ -5,6 +5,7 @@ import { seedCommands, seedEnvs, seedRunbooks } from './lib/seed'
 import { seedBoardCommands, seedBoards, seedCards, seedConnections, seedFdcBoard, seedFdcCards, seedFdcConnections, seedTsumBoard, seedTsumCards } from './lib/seedBoard'
 import { now, uid } from './lib/util'
 import { migrateConns } from './lib/conn'
+import { FILE_TABLES, LOCAL_KV, attachFiles, onFileError, withMirrorPaused, type FileTable } from './lib/fileStore'
 
 const defaultSettings: Settings = { theme: 'system', userName: '', activeEnvId: 'env_prod' }
 
@@ -20,6 +21,8 @@ interface State {
   settings: Settings
   toast: string | null
   paletteOpen: boolean
+  /** 파일 저장소 폴더. 없으면 이 브라우저(IndexedDB)에만 저장한다 */
+  fileDir?: string
 
   init: () => Promise<void>
   showToast: (msg: string) => void
@@ -78,6 +81,27 @@ export const useStore = create<State>((set, get) => ({
   paletteOpen: false,
 
   init: async () => {
+    onFileError((msg) => get().showToast(`파일에 저장하지 못했습니다: ${msg}`))
+    // 파일 저장소(npm run dev)에 붙으면 파일 내용으로 IndexedDB 를 채운다. 그 뒤의 쓰기는 파일에도 간다
+    const files = await attachFiles(async () => Object.fromEntries(await Promise.all(FILE_TABLES.map(async (t) => [t, await db.table(t).toArray()]))) as Record<FileTable, Record<string, unknown>[]>)
+    const fromFiles = files.tables
+    if (fromFiles) {
+      await withMirrorPaused(() =>
+        db.transaction(
+          'rw',
+          FILE_TABLES.map((t) => db.table(t)),
+          async () => {
+            for (const t of FILE_TABLES) {
+              // 설정(kv 의 settings)은 브라우저에만 있으므로 남긴다
+              if (t === 'kv') await db.kv.where('key').noneOf([...LOCAL_KV]).delete()
+              else await db.table(t).clear()
+              await db.table(t).bulkPut(fromFiles[t])
+            }
+          },
+        ),
+      )
+    }
+    if (files.errors.length) console.warn('[file-store] 읽지 못한 파일', files.errors)
     const seeded = await db.kv.get('seeded')
     if (!seeded) {
       await db.transaction('rw', [db.commands, db.runbooks, db.envs, db.kv], async () => {
@@ -151,6 +175,7 @@ export const useStore = create<State>((set, get) => ({
     }
     set({
       ready: true,
+      fileDir: files.status.ok ? files.status.dir : undefined,
       commands: sortByUpdated(commands),
       runbooks: sortByUpdated(runbooks),
       runs: [...runs].sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1)),
