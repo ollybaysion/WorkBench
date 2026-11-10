@@ -62,11 +62,10 @@ export const seedBoardCommands: Command[] = [
   },
 ]
 
-const query = (id: string, title: string, connection: string, sql: string, view: CardView, keyColumns: string[] = []): Card => ({
+const query = (id: string, title: string, sql: string, view: CardView, keyColumns: string[] = []): Card => ({
   ...base(id),
   kind: 'query',
   title,
-  connection,
   sql,
   keyColumns,
   view,
@@ -76,7 +75,6 @@ export const seedCards: Card[] = [
   query(
     'card_sensor_trace',
     '센서 트렌드',
-    'FDC-L1',
     'select ts, snsr_id, value\nfrom fdc_trace\nwhere eqp_id = :eqp_id\n  and ts between :from and :to\norder by ts',
     { kind: 'chart', type: 'line', x: 'ts', y: ['value'], series: 'snsr_id' },
     ['ts', 'snsr_id'],
@@ -84,7 +82,6 @@ export const seedCards: Card[] = [
   query(
     'card_voc_same_eqp',
     '같은 설비 VOC 티켓',
-    'LOGDB',
     "select ticket_no as ticket, to_char(opened_at, 'MM-DD') as opened, status, title\nfrom voc_ticket\nwhere eqp_id = :eqp_id\norder by case when ticket_no = :ticket then 0 else 1 end, opened_at desc",
     { kind: 'table' },
     ['ticket'],
@@ -92,7 +89,6 @@ export const seedCards: Card[] = [
   query(
     'card_lot_count',
     '10 분 단위 로트 수',
-    'FDC-L1',
     "select to_char(trunc(start_ts, 'HH24') + floor(to_char(start_ts, 'MI') / 10) * 10 / 1440, 'HH24:MI') as ts,\n       count(*) as lots\nfrom fdc_lot\nwhere line_id = :line\n  and start_ts between :from and :to\ngroup by trunc(start_ts, 'HH24') + floor(to_char(start_ts, 'MI') / 10) * 10 / 1440\norder by 1",
     { kind: 'chart', type: 'bar', x: 'ts', y: ['lots'] },
     ['ts'],
@@ -100,7 +96,6 @@ export const seedCards: Card[] = [
   query(
     'card_alarm_dist',
     '알람 코드 분포(7 일)',
-    'FDC-L1',
     'select alarm_cd, count(*) as cnt, round(100 * ratio_to_report(count(*)) over ()) as pct\nfrom fdc_alarm\nwhere eqp_id = :eqp_id\n  and ts >= sysdate - 7\ngroup by alarm_cd\norder by cnt desc',
     { kind: 'chart', type: 'bar', x: 'alarm_cd', y: ['cnt'] },
     ['alarm_cd'],
@@ -108,7 +103,6 @@ export const seedCards: Card[] = [
   query(
     'card_alarm_hist',
     '알람 이력',
-    'FDC-L1',
     'select ts, alarm_cd, level, message\nfrom fdc_alarm\nwhere eqp_id = :eqp_id\n  and ts between :from and :to\norder by sev desc, ts desc',
     { kind: 'table' },
     ['ts', 'alarm_cd'],
@@ -116,7 +110,6 @@ export const seedCards: Card[] = [
   query(
     'card_recipe_chg',
     '레시피 변경',
-    'FDC-L1',
     'select old_val as "before", new_val as "after", chg_by as who, chg_ts as ts\nfrom fdc_recipe_hist\nwhere eqp_id = :eqp_id\n  and chg_ts >= :from\norder by chg_ts desc',
     { kind: 'table' },
     ['ts', 'before'],
@@ -124,7 +117,6 @@ export const seedCards: Card[] = [
   query(
     'card_wafer_map',
     '웨이퍼 결함 맵',
-    'FDC-L1',
     'select die_x, die_y, defects\nfrom fdc_wafer_defect\nwhere lot_id = :lot_id\norder by die_y, die_x',
     { kind: 'chart', type: 'heatmap', x: 'die_x', y: ['die_y', 'defects'] },
     ['die_x', 'die_y'],
@@ -138,7 +130,6 @@ export const seedCards: Card[] = [
   query(
     'card_log_err',
     '앱 오류 로그(최근 200)',
-    'LOGDB',
     "select * from (\n  select log_ts as ts, level_cd as level, message\n  from app_log\n  where eqp_id = :eqp_id\n    and log_ts >= :from\n    and level_cd in ('ERROR', 'FATAL')\n  order by log_ts desc\n) where rownum <= 200",
     { kind: 'table' },
     ['ts'],
@@ -152,7 +143,6 @@ export const seedCards: Card[] = [
   query(
     'card_sess_count',
     'DB 세션 수',
-    'FDC-L2',
     "select machine, count(*) as sessions\nfrom v$session\nwhere username = 'FDC_' || :line\ngroup by machine\norder by sessions desc",
     { kind: 'table' },
     ['machine'],
@@ -166,7 +156,6 @@ const fdc = (id: string, title: string, sql: string, view: CardView, extra: { pi
   ...base(id, ['fdc']),
   kind: 'query',
   title,
-  connection: 'FDC-DEMO',
   sql,
   keyColumns: [],
   view,
@@ -257,7 +246,7 @@ export const seedFdcBoard: Board = {
   title: 'FDC 확인 · ETCH-03',
   cells: FDC_PLACE.map(([cardId, x, y, w, h]) => ({ cardId, x, y, w, h })),
   vars: { eqp_id: 'ETCH-03', chamber: 'CH-A', lot_id: 'L2611-07', wafer: '12', param: 'RF_REF_PWR', step: '3' },
-  conns: { 'FDC-DEMO': 'conn_fdc_demo' },
+  connId: 'conn_fdc_demo',
 }
 
 // ===== TSUM 확인 작업판 =====
@@ -269,7 +258,6 @@ const tsum = (id: string, title: string, sql: string, view: CardView, extra: { p
   ...base(id, ['fdc', 'tsum']),
   kind: 'query',
   title,
-  connection: 'FDC-DEMO',
   sql,
   keyColumns: [],
   view,
@@ -334,7 +322,7 @@ export const seedTsumBoard: Board = {
   title: 'TSUM 확인 · ETCH-03',
   cells: TSUM_PLACE.map(([cardId, x, y, w, h]) => ({ cardId, x, y, w, h })),
   vars: { eqp_id: 'ETCH-03', chamber: 'CH-A', lot_id: 'L2611-07', wafer: '12', tsum_id: 'T01', sensor: 'RF_REF_PWR' },
-  conns: { 'FDC-DEMO': 'conn_fdc_demo' },
+  connId: 'conn_fdc_demo',
 }
 
 // gen.py PLACE — (카드, 열, 줄, 폭, 높이)
@@ -359,6 +347,6 @@ export const seedBoards: Board[] = [
     cells: PLACE.map(([cardId, x, y, w, h]) => ({ cardId, x, y, w, h })),
     // kit.VARS 기본값
     vars: { line: 'L1', eqp_id: 'EQP-A12', from: '2026-10-28 14:00', to: '2026-10-28 15:00', ticket: 'VOC-2318', lot_id: '' },
-    conns: { 'FDC-L1': 'conn_fdc_l1_prod', 'FDC-L2': 'conn_fdc_l2_prod', LOGDB: 'conn_logdb_prod' },
+    connId: 'conn_fdc_l1_prod',
   },
 ]

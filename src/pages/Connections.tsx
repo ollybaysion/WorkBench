@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useStore } from '../store'
 import type { Connection } from '../types'
-import { connNames } from '../lib/conn'
 import { now, uid } from '../lib/util'
 import { agentStatus, pingAlias, type AgentConn, type AgentStatus } from '../lib/agentDb'
 import Topbar from '../components/Topbar'
 import SettingsTabs from '../components/SettingsTabs'
 
 /**
- * 설정 › DB 연결. agent-db 의 alias 목록을 보여 주고, alias 마다 이름(FDC-L1 · LOGDB …)을 붙인다.
- * 카드는 이름을 가리키고, 작업대 연결 띠가 같은 이름의 alias 중 하나를 고른다.
+ * 설정 › DB 연결. agent-db 의 alias 목록을 보여 주고, alias 마다 이름(FDC-L1 운영 · LOGDB …)을 붙인다.
+ * 이름을 붙인 alias 는 작업대 연결 띠에 나온다. 작업판이 그중 하나를 고르고, 작업판의 조회 카드는 모두 그 연결로 조회한다.
  * 접속 주소 · 사용자 · 비밀번호는 agent-db 의 connections.json 이 가진다.
  */
 export default function ConnectionsPage() {
@@ -31,7 +30,6 @@ export default function ConnectionsPage() {
   const known = new Set(aliases.map((a) => a.alias))
   // alias 가 없는 연결(가짜 결과)과 agent-db 가 모르는 alias 의 연결
   const others = status?.ok ? connections.filter((c) => !c.alias || !known.has(c.alias)) : []
-  const names = connNames(connections)
 
   return (
     <>
@@ -48,7 +46,7 @@ export default function ConnectionsPage() {
             <span className="pill red">붙지 못함</span>
           )}
           <span className="small muted" style={{ fontWeight: 400 }}>
-            alias 에 이름을 붙이면 그 이름을 쓰는 카드가 agent-db 로 Oracle 을 조회합니다.
+            alias 에 이름을 붙이면 작업대 연결 띠에서 그 alias 를 고를 수 있습니다.
           </span>
           <button type="button" className="btn small" style={{ marginLeft: 'auto' }} onClick={refresh} disabled={status === null}>
             ↻ 다시 확인
@@ -70,18 +68,13 @@ export default function ConnectionsPage() {
             </div>
           ))}
 
-        <datalist id="conn-names">
-          {names.map((n) => (
-            <option key={n} value={n} />
-          ))}
-        </datalist>
         {status?.ok &&
           (aliases.length ? (
             <div className="alias-list">
               <div className="arow head">
                 <span>alias</span>
-                <span>이름 (카드가 가리키는 묶음)</span>
-                <span>쓰는 카드</span>
+                <span>이름 (연결 띠에 보이는 이름)</span>
+                <span>쓰는 작업판</span>
                 <span />
               </div>
               {aliases.map((a) => {
@@ -94,8 +87,8 @@ export default function ConnectionsPage() {
           ))}
 
         <div className="note-box">
-          같은 DB 의 alias 들(예: <code>fdc-l1-prod</code> · <code>fdc-l1-dev</code>)에 같은 이름(<code>FDC-L1</code>)을 붙이세요. 작업대 위 연결 띠에서 이름마다 어느 alias
-          로 조회할지 고릅니다. 이름을 비우면 그 alias 는 카드에서 쓰이지 않습니다.
+          alias 마다 알아보기 쉬운 이름(예: <code>FDC-L1 운영</code>)을 붙이세요. 작업대 위 연결 띠에서 작업판마다 연결 하나를 고릅니다. 그 작업판의 조회 카드는 모두 그
+          연결로 조회합니다. 이름을 비우면 그 alias 는 연결 띠 목록에서 내려갑니다.
         </div>
       </div>
 
@@ -106,13 +99,9 @@ export default function ConnectionsPage() {
 }
 
 function AliasRow({ info, conn }: { info: AgentConn; conn?: Connection }) {
-  const connections = useStore((s) => s.connections)
-  const cards = useStore((s) => s.cards)
   const boards = useStore((s) => s.boards)
   const upsertConnection = useStore((s) => s.upsertConnection)
   const deleteConnection = useStore((s) => s.deleteConnection)
-  const upsertCard = useStore((s) => s.upsertCard)
-  const upsertBoard = useStore((s) => s.upsertBoard)
   const showToast = useStore((s) => s.showToast)
   const [name, setName] = useState(conn?.name ?? '')
   const [busy, setBusy] = useState(false)
@@ -121,19 +110,16 @@ function AliasRow({ info, conn }: { info: AgentConn; conn?: Connection }) {
   const oldName = conn?.name ?? ''
   const next = name.trim()
   const dirty = next !== oldName
-  const usedBy = (n: string) => cards.filter((c) => c.kind === 'query' && c.connection === n)
-  const uses = oldName ? usedBy(oldName).length : 0
-  // 이 alias 가 그 이름의 마지막 연결이면, 이름을 바꾸거나 비울 때 카드가 연결을 잃는다
-  const lastOfName = !!conn && !connections.some((c) => c.id !== conn.id && c.name === oldName)
+  // 이 연결을 고른 작업판 수
+  const uses = conn ? boards.filter((b) => b.connId === conn.id).length : 0
 
   const save = async () => {
     if (!dirty || busy) return
-    const users = oldName ? usedBy(oldName) : []
     setBusy(true)
     try {
       if (!next) {
         if (!conn) return
-        if (lastOfName && users.length && !window.confirm(`카드 ${users.length} 개가 ${oldName} 를 씁니다. 이름을 비우면 이 카드들은 연결을 잃습니다. 비울까요?`)) return setName(oldName)
+        if (uses && !window.confirm(`작업판 ${uses} 개가 ${oldName} 로 조회합니다. 이름을 비우면 이 작업판들은 기본 연결로 조회합니다. 비울까요?`)) return setName(oldName)
         await deleteConnection(conn.id)
         return showToast(`${info.alias} 의 이름을 비웠습니다`)
       }
@@ -157,17 +143,7 @@ function AliasRow({ info, conn }: { info: AgentConn; conn?: Connection }) {
         })
         return showToast(`${info.alias} 를 ${next} 로 붙였습니다`)
       }
-      const follow = lastOfName && users.length > 0 && window.confirm(`카드 ${users.length} 개가 ${oldName} 를 씁니다. 카드도 ${next} 로 바꿀까요?`)
       await upsertConnection({ ...conn, name: next })
-      if (follow) {
-        for (const c of users) await upsertCard({ ...c, connection: next } as typeof c)
-        for (const b of boards) {
-          const picked = b.conns?.[oldName]
-          if (picked === undefined) continue
-          const { [oldName]: _old, ...rest } = b.conns ?? {}
-          await upsertBoard({ ...b, conns: { ...rest, [next]: picked } })
-        }
-      }
       showToast(`${info.alias} 의 이름을 ${next} 로 바꿨습니다`)
     } finally {
       setBusy(false)
@@ -200,7 +176,7 @@ function AliasRow({ info, conn }: { info: AgentConn; conn?: Connection }) {
           void save()
         }}
       >
-        <input className="input mono" list="conn-names" value={name} onChange={(e) => setName(e.target.value)} placeholder="이름 없음 · 예: FDC-L1" aria-label={`${info.alias} 이름`} spellCheck={false} />
+        <input className="input mono" value={name} onChange={(e) => setName(e.target.value)} placeholder="이름 없음 · 예: FDC-L1" aria-label={`${info.alias} 이름`} spellCheck={false} />
         {dirty && (
           <>
             <button type="submit" className="btn small primary" disabled={busy}>
@@ -212,7 +188,7 @@ function AliasRow({ info, conn }: { info: AgentConn; conn?: Connection }) {
           </>
         )}
       </form>
-      <span className="small muted">{oldName ? `카드 ${uses}` : '-'}</span>
+      <span className="small muted">{oldName ? `작업판 ${uses}` : '-'}</span>
       <div className="alias-test">
         <button type="button" className="btn small" onClick={() => void runTest()} disabled={test?.busy === true}>
           ▶ 연결 테스트
@@ -227,19 +203,18 @@ function AliasRow({ info, conn }: { info: AgentConn; conn?: Connection }) {
   )
 }
 
-/** alias 가 없거나 agent-db 가 모르는 alias 의 연결. 그 이름의 카드는 가짜 결과를 쓴다 */
+/** alias 가 없거나 agent-db 가 모르는 alias 의 연결. 이 연결을 고른 작업판은 가짜 결과를 쓴다 */
 function OtherConnections({ list, offline }: { list: Connection[]; offline?: boolean }) {
-  const cards = useStore((s) => s.cards)
-  const connections = useStore((s) => s.connections)
+  const boards = useStore((s) => s.boards)
   const deleteConnection = useStore((s) => s.deleteConnection)
   const showToast = useStore((s) => s.showToast)
   const envs = useStore((s) => s.envs)
   const envName = (id: string) => envs.find((e) => e.id === id)?.name ?? ''
 
+  const usesOf = (c: Connection) => boards.filter((b) => b.connId === c.id).length
   const remove = async (c: Connection) => {
-    const users = cards.filter((x) => x.kind === 'query' && x.connection === c.name).length
-    const last = !connections.some((x) => x.id !== c.id && x.name === c.name)
-    const warn = last && users ? ` 카드 ${users} 개가 ${c.name} 연결을 잃습니다.` : ''
+    const users = usesOf(c)
+    const warn = users ? ` 작업판 ${users} 개가 이 연결로 조회합니다. 지우면 기본 연결로 조회합니다.` : ''
     if (!window.confirm(`${c.name} 의 이 연결을 지울까요?${warn}`)) return
     await deleteConnection(c.id)
     showToast('연결을 지웠습니다')
@@ -261,7 +236,7 @@ function OtherConnections({ list, offline }: { list: Connection[]; offline?: boo
               <span className="small muted">{c.alias ? `alias ${c.alias}${offline ? '' : ' · agent-db 에 없음'}` : `가짜 결과${envName(c.envId) ? ` · ${envName(c.envId)}` : ''}`}</span>
             </div>
             <span />
-            <span className="small muted">카드 {cards.filter((x) => x.kind === 'query' && x.connection === c.name).length}</span>
+            <span className="small muted">작업판 {usesOf(c)}</span>
             <div className="alias-test">
               <button type="button" className="btn small danger" onClick={() => void remove(c)}>
                 지우기

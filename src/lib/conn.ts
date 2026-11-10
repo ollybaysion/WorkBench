@@ -1,19 +1,12 @@
 import type { Board, Card, Connection, EnvPreset } from '../types'
 
-/** 연결 이름 목록(가나다순, 중복 없이) */
-export function connNames(connections: Connection[]): string[] {
-  return [...new Set(connections.map((c) => c.name))].sort((a, b) => a.localeCompare(b, 'ko'))
-}
-
-/** 같은 이름의 연결들. agent-db alias 가 있는 것 먼저(alias 순), 그다음 가짜 결과 연결(환경 프리셋 순) */
-export function connsNamed(name: string, connections: Connection[], envs: EnvPreset[]): Connection[] {
+/** 연결 띠에 보일 순서. agent-db alias 가 있는 것 먼저(이름 순), 그다음 가짜 결과 연결(환경 프리셋 순) */
+export function connOptions(connections: Connection[], envs: EnvPreset[]): Connection[] {
   const order = (c: Connection) => {
     const i = envs.findIndex((e) => e.id === c.envId)
     return i < 0 ? envs.length : i
   }
-  return connections
-    .filter((c) => c.name === name)
-    .sort((a, b) => (a.alias ? 0 : 1) - (b.alias ? 0 : 1) || (a.alias ?? '').localeCompare(b.alias ?? '') || order(a) - order(b))
+  return [...connections].sort((a, b) => (a.alias ? 0 : 1) - (b.alias ? 0 : 1) || a.name.localeCompare(b.name, 'ko') || order(a) - order(b))
 }
 
 /** 연결 띠 · 카드 머리에 보일 글자: alias, 없으면 "가짜 결과(환경)" */
@@ -24,45 +17,45 @@ export function connLabel(c: Connection, envs: EnvPreset[]): string {
 }
 
 /**
- * 작업판이 연결 이름에 쓰는 실제 연결.
- * 작업판이 고른 연결(board.conns)이 먼저다. 고른 것이 없거나 지워졌으면 connsNamed 의 첫 연결(alias 있는 것 먼저)을 쓴다.
- * 고른 연결이 가짜 결과이고 같은 이름에 alias 연결이 있으면 alias 연결을 쓴다(alias 에 이름만 붙이면 바로 조회된다).
+ * 작업판이 쓰는 연결. 작업판의 조회 카드는 모두 이 연결로 조회한다.
+ * 작업판이 고른 연결(board.connId)이 먼저다. 고른 것이 없거나 지워졌으면 connOptions 의 첫 연결(alias 있는 것 먼저)을 쓴다.
  * 사이드바의 환경 프리셋(명령 변수용)과는 따로 움직인다.
  */
-export function resolveConn(name: string, board: Pick<Board, 'conns'>, connections: Connection[], envs: EnvPreset[]): Connection | undefined {
-  const picked = connections.find((c) => c.id === board.conns?.[name] && c.name === name)
-  const first = connsNamed(name, connections, envs)[0]
-  if (picked && (picked.alias || !first?.alias)) return picked
-  return first
+export function resolveConn(board: Pick<Board, 'connId'>, connections: Connection[], envs: EnvPreset[]): Connection | undefined {
+  return connections.find((c) => c.id === board.connId) ?? connOptions(connections, envs)[0]
 }
 
-/** 예전 카드(connectionId)를 연결 이름으로 옮긴다. 바뀐 카드만 돌려준다 */
-export function migrateCards(cards: Card[], connections: Connection[]): Card[] {
-  const out: Card[] = []
-  for (const c of cards) {
-    if (c.kind !== 'query' || typeof c.connection === 'string') continue
-    const { connectionId, ...rest } = c as Card & { connectionId?: string }
-    out.push({ ...rest, connection: connections.find((x) => x.id === connectionId)?.name ?? '' } as Card)
-  }
-  return out
-}
+/** 예전 저장 모양: 카드가 연결 이름(connection) 또는 연결 id(connectionId)를 들고, 작업판이 이름마다 연결을 골랐다(conns) */
+type OldCard = Card & { connection?: string; connectionId?: string }
+type OldBoard = Board & { conns?: Record<string, string> }
 
-/** 예전 카드가 가리키던 연결 id 를 작업판의 연결 선택으로 남긴다(같은 연결에 계속 붙게) */
-export function migrateBoards(boards: Board[], oldCards: Card[], connections: Connection[]): Board[] {
-  const byCard = new Map<string, string>()
-  for (const c of oldCards) {
-    const id = (c as Card & { connectionId?: string }).connectionId
-    if (id) byCard.set(c.id, id)
+/**
+ * 예전 저장 모양을 지금 모양으로 옮긴다. 바뀐 카드 · 작업판만 돌려준다.
+ * 작업판은 카드 순서대로 처음 찾은 연결 하나를 고른다: 작업판이 그 이름에 고른 연결, 그 이름의 첫 연결, 카드의 예전 연결 id 순.
+ * 카드에서는 연결 필드를 지운다. 예전 백업 파일을 가져온 뒤에도 이 길을 탄다.
+ */
+export function migrateConns(cards: Card[], boards: Board[], connections: Connection[], envs: EnvPreset[]): { cards: Card[]; boards: Board[] } {
+  const byId = new Map(cards.map((c) => [c.id, c as OldCard]))
+  const exists = (id?: string) => !!id && connections.some((c) => c.id === id)
+  const outBoards: Board[] = []
+  for (const b of boards as OldBoard[]) {
+    const olds = b.cells.map((cell) => byId.get(cell.cardId)).filter((c): c is OldCard => c?.kind === 'query')
+    const legacy = 'conns' in b || (!b.connId && olds.some((c) => 'connection' in c || 'connectionId' in c))
+    if (!legacy) continue
+    const { conns = {}, ...rest } = b
+    const names = olds.map((c) => c.connection ?? '').filter(Boolean)
+    const connId =
+      (b.connId && exists(b.connId) ? b.connId : undefined) ??
+      names.map((n) => conns[n]).find(exists) ??
+      names.map((n) => connOptions(connections, envs).find((c) => c.name === n)?.id).find(exists) ??
+      olds.map((c) => c.connectionId).find(exists)
+    outBoards.push(connId ? { ...rest, connId } : rest)
   }
-  const out: Board[] = []
-  for (const b of boards) {
-    if (b.conns) continue
-    const conns: Record<string, string> = {}
-    for (const cell of b.cells) {
-      const conn = connections.find((x) => x.id === byCard.get(cell.cardId))
-      if (conn && !conns[conn.name]) conns[conn.name] = conn.id
-    }
-    out.push({ ...b, conns })
+  const outCards: Card[] = []
+  for (const c of cards as OldCard[]) {
+    if (!('connection' in c) && !('connectionId' in c)) continue
+    const { connection: _n, connectionId: _i, ...rest } = c
+    outCards.push(rest as Card)
   }
-  return out
+  return { cards: outCards, boards: outBoards }
 }

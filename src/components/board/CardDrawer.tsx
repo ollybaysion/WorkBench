@@ -52,7 +52,7 @@ export default function CardDrawer({ card, conn, run, boardVars, checks, onCheck
         {card.kind === 'query' ? (
           <>
             {card.view.kind === 'chart' && <span className="pill gray">{card.view.type}</span>}
-            <ConnTag conn={conn} name={card.connection} />
+            <ConnTag conn={conn} />
             <button type="button" className="btn small" onClick={onRerun} disabled={run?.status === 'loading'}>
               ↻ 다시 조회
             </button>

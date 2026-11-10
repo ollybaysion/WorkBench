@@ -11,9 +11,9 @@ import type { CardView } from '../../types'
 import { pickHint, type Marks } from '../../lib/marks'
 
 /** 연결 태그 `FDC-L1 · production`. 좁은 카드에서는 환경 이름을 숨긴다(index.css 컨테이너 쿼리) */
-export function ConnTag({ conn, name }: { conn?: Connection; name: string }) {
+export function ConnTag({ conn }: { conn?: Connection }) {
   const envs = useStore((s) => s.envs)
-  if (!conn) return <span className="qc-conn err">⛁ {name || '연결'} 없음</span>
+  if (!conn) return <span className="qc-conn err">⛁ 연결 없음</span>
   return (
     <span className={'qc-conn' + (conn.alias ? '' : ' fake')} title={conn.alias ? `agent-db ${conn.alias} 로 조회` : '가짜 결과'}>
       ⛁ {conn.name}
@@ -115,7 +115,6 @@ export function QueryFoot({ run, hint }: { run?: QueryState; hint?: string }) {
 
 export default function QueryCardView({
   card,
-  conn,
   run,
   stale,
   selected,
@@ -125,7 +124,6 @@ export default function QueryCardView({
   onPick,
 }: {
   card: QueryCard
-  conn?: Connection
   run?: QueryState
   stale: boolean
   selected: boolean
@@ -156,7 +154,6 @@ export default function QueryCardView({
           {card.title}
         </span>
         <ModeSeg mode={mode} chart={chart} onMode={setMode} chartType={card.view.kind === 'chart' ? card.view.type : undefined} />
-        <ConnTag conn={conn} name={card.connection} />
         <QueryStatus run={run} />
         <button
           type="button"

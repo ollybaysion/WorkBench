@@ -323,13 +323,10 @@ pre.code { background: var(--code-bg); color: var(--code-text); padding: 12px 14
 /* 격자 · 카드 */
 .bgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 184px; gap: 12px; }
 .bcell { display: flex; min-width: 0; min-height: 0; container-type: inline-size; }
-/* 좁은 카드(1 칸): 머리에서 환경 이름 · 상태를 숨긴다(발에 다시 나온다), 발의 글자는 줄인다 */
+/* 좁은 카드(1 칸): 머리에서 상태를 숨긴다(발에 다시 나온다), 발의 글자는 줄인다 */
 @container (max-width: 360px) {
-  .qc-conn .env, .qc-status { display: none; }
+  .qc-status { display: none; }
   .qc-foot.cfoot .uses { display: none; }
-}
-@container (max-width: 300px) {
-  .qcard .qc-head .qc-conn { display: none; } /* 1×1 카드는 제목이 먼저. 연결은 연결 띠 · 서랍에서 본다 */
 }
 .qcard { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; overflow: hidden; cursor: pointer; }
 .qcard:hover { border-color: var(--accent); }
