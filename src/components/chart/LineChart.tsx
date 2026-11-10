@@ -132,7 +132,7 @@ interface Tip {
   plotRight: number
 }
 
-/** 범례: 시리즈 · 겹침(고른 것 + 회색 N 개) · 한계선 · 가장 많이 넘은 점 */
+/** 범례: 시리즈 · 겹침(고른 것 + 옅은 N 개) · 한계선 · 가장 많이 넘은 점 */
 function PanelLegend({ panel, time }: { panel: Panel; time: boolean }) {
   const { data, extras } = panel
   const focus = extras?.focus
@@ -255,8 +255,8 @@ function LinePanel({ type, panel, width, height, showX, legend, syncKey, zoom }:
       series: [
         {},
         ...data.series.map((s) => {
-          // 겹침 모드의 회색 시리즈: 얇고 흐리게, 커서 점 없이
-          if (s.muted) return { label: s.name, stroke: `${muted}66`, width: 1, spanGaps: true, points: { show: false }, ...(type === 'step' ? { paths: uPlot.paths.stepped!({ align: 1 }) } : {}) }
+          // 겹침 모드의 나머지 시리즈: 제 색으로 얇고 옅게, 커서 점 없이
+          if (s.muted) return { label: s.name, stroke: `${cssVar(`--series-${(s.slot % 8) + 1}`)}66`, width: 1, spanGaps: true, points: { show: false }, ...(type === 'step' ? { paths: uPlot.paths.stepped!({ align: 1 }) } : {}) }
           const c = cssVar(`--series-${(s.slot % 8) + 1}`)
           return {
             label: s.name,
@@ -376,7 +376,7 @@ function LinePanel({ type, panel, width, height, showX, legend, syncKey, zoom }:
   }, [width, height])
 
   const flip = tip ? tip.left > tip.plotRight - 170 : false
-  // 겹침 모드의 툴팁은 고른 시리즈만(회색 시리즈는 수만)
+  // 겹침 모드의 툴팁은 고른 시리즈만(나머지 시리즈는 수만)
   const tipSeries = extras?.focus ? data.series.filter((s) => !s.muted) : data.series
   const phaseAt = (i: number) => {
     const x = data.xs[i]
@@ -407,7 +407,7 @@ function LinePanel({ type, panel, width, height, showX, legend, syncKey, zoom }:
               {s.name} <em>{s.values[tip.idx] == null ? '—' : fmtVal(s.values[tip.idx]!)}</em>
             </span>
           ))}
-          {extras?.focus && extras.focus.others > 0 && <span className="muted">그 외 {extras.focus.others} 개 회색</span>}
+          {extras?.focus && extras.focus.others > 0 && <span className="muted">그 외 {extras.focus.others} 개</span>}
           {extras?.ucl?.[tip.idx] != null && (
             <span>
               UCL <em>{fmtVal(extras.ucl[tip.idx]!)}</em>
