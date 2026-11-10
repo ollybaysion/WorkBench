@@ -79,6 +79,8 @@ export interface Settings {
   lastBackupAt?: string
   /** 왼쪽 패널을 아이콘 줄로 접는다(넓은 화면만) */
   sideMini?: boolean
+  /** 사이드바에서 접어 둔 작업판 묶음 */
+  sideGroupsClosed?: string[]
   /** AKG 지식 허브 주소. 끝 슬래시 없이 저장한다. 예 http://akg.fdc.localhost:8000 */
   akgUrl?: string
   /** AKG 개인 읽기 토큰(akgr_…). 비밀이므로 JSON 내보내기 · 가져오기에 싣지 않는다. */
@@ -159,6 +161,8 @@ export interface BoardCell {
 }
 export interface Board extends Base {
   title: string
+  /** 기능 묶음 이름(TSUM · EVENT · INTERLOCK 같은). 사이드바 · 선택 상자가 묶어 보인다. 없으면 묶음 없음 */
+  group?: string
   cells: BoardCell[]
   vars: Record<string, string> // 변수 띠 값
   /** 이 작업판이 조회할 연결(Connection.id). 조회 카드는 모두 이 연결로 조회한다. 없으면 lib/conn.ts 의 기본 규칙 */
