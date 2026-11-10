@@ -46,6 +46,7 @@ function BoardEditor({ board }: { board: Board }) {
   const cards = useStore((s) => s.cards)
   const connections = useStore((s) => s.connections)
   const upsertBoard = useStore((s) => s.upsertBoard)
+  const deleteBoard = useStore((s) => s.deleteBoard)
   const upsertCard = useStore((s) => s.upsertCard)
   const deleteCard = useStore((s) => s.deleteCard)
   const showToast = useStore((s) => s.showToast)
@@ -85,6 +86,17 @@ function BoardEditor({ board }: { board: Board }) {
   const card = draftSel ? draftSel.draft : sel ? cards.find((c) => 'id' in sel && c.id === sel.id) : undefined
   const cell = card && base.find((c) => c.cardId === card.id)
   const size = draftSel ? draftSel.size : cell && { w: cell.w, h: cell.h }
+
+  // 작업판만 지운다. 카드는 보관함에 남아 다른 작업판에 다시 올릴 수 있다
+  const removeBoard = async () => {
+    const n = board.cells.length
+    const msg = `"${board.title}" 작업판을 지울까요?` + (n ? ` 올려 둔 카드 ${n} 장은 보관함에 남습니다.` : '')
+    if (!window.confirm(msg)) return
+    dirty.current = false
+    await deleteBoard(board.id)
+    showToast(`"${board.title}" 작업판을 지웠습니다`)
+    navigate('/settings/board')
+  }
 
   const addCard = () => {
     const t = now()
@@ -179,6 +191,9 @@ function BoardEditor({ board }: { board: Board }) {
             <Link className="btn" to={`/board/${board.id}`}>
               작업대에서 보기
             </Link>
+            <button type="button" className="btn danger" onClick={() => void removeBoard()}>
+              작업판 지우기
+            </button>
           </div>
 
           {placed.length ? (
