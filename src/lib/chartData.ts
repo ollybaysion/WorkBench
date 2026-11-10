@@ -284,9 +284,36 @@ function quantile(sorted: number[], p: number): number {
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo)
 }
 
+/**
+ * 숫자 타일의 열 모양(x 열이 빈 경우): y 열마다 타일 하나. 이름은 적은 열 이름, 값은 첫 행 값.
+ * 한 행짜리 요약 쿼리(select count(*) as lot_cnt, max(..) as alarm_max …)를 열마다 보이는 쓰임이다.
+ */
+function statByColumn(result: QueryResult, spec: ChartSpec, opts: PrepareOpts): Prepared {
+  const found = lookup(result, spec.y)
+  if (typeof found === 'string') return fail(found)
+  const row = result.rows[0]
+  const lc = limitCols(result, opts.limits)
+  const tiles: StatTile[] = row
+    ? found.map((y, i) => {
+        const value = toNum(row[y])
+        const raw = row[y]
+        return {
+          label: spec.y[i].trim(),
+          value,
+          ...(value === null && raw !== null && String(raw).trim() !== '' ? { text: String(raw) } : {}),
+          row: 0,
+          ...(hasLimits(lc) ? { cmp: lc.value >= 0 ? toNum(row[lc.value]) : value, lcl: rowLimit(row, lc.lcl), ucl: rowLimit(row, lc.ucl) } : {}),
+        }
+      })
+    : []
+  const n = result.rows.length
+  return { kind: 'stat', tiles: tiles.slice(0, STAT_MAX), note: n > 1 ? `첫 행만 타일로 보입니다(${n} 행 중). 표에서 모두 봅니다.` : undefined }
+}
+
 export function prepare(result: QueryResult, spec: ChartSpec, opts: PrepareOpts = {}): Prepared {
-  if (!spec.x.trim()) return fail('그래프의 x 열을 정하세요')
   if (spec.y.length === 0) return fail('그래프의 y 열을 정하세요')
+  if (spec.type === 'stat' && !spec.x.trim()) return statByColumn(result, spec, opts)
+  if (!spec.x.trim()) return fail('그래프의 x 열을 정하세요')
   const found = lookup(result, [spec.x, ...spec.y, ...(spec.series ? [spec.series] : [])])
   if (typeof found === 'string') return fail(found)
   const [xi, ...rest] = found
