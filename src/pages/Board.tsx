@@ -11,6 +11,7 @@ import VarBand from '../components/board/VarBand'
 import ConnBand from '../components/board/ConnBand'
 import BoardGrid, { type Placed } from '../components/board/BoardGrid'
 import CardDrawer from '../components/board/CardDrawer'
+import BoardOptions from '../components/board/BoardOptions'
 
 const byTitle = (a: Board, b: Board) => a.title.localeCompare(b.title, 'ko')
 
@@ -187,11 +188,7 @@ function BoardView({ board }: { board: Board }) {
   const title =
     boards.length > 1 ? (
       <select className="input board-select" value={board.id} onChange={(e) => navigate(`/board/${e.target.value}`)} aria-label="보드 선택">
-        {[...boards].sort(byTitle).map((b) => (
-          <option key={b.id} value={b.id}>
-            {b.title}
-          </option>
-        ))}
+        <BoardOptions boards={boards} />
       </select>
     ) : (
       board.title

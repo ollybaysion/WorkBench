@@ -61,6 +61,12 @@ p { margin: 0 0 8px; }
 .nav-item .n { margin-left: auto; font-size: 11px; background: var(--surface-2); padding: 1px 7px; border-radius: 999px; color: var(--muted); }
 .nav-item.sub { padding: 5px 10px 5px 34px; font-size: 13px; }
 .nav-item.nav-add { color: var(--accent); }
+.nav-item.nav-group { color: var(--text); font-weight: 600; }
+.nav-item.nav-group .caret { width: 10px; flex: none; font-size: 10px; color: var(--muted); }
+.nav-item.nav-group.active { background: var(--accent-soft); color: var(--accent); }
+.nav-item.sub.in-group { padding-left: 52px; }
+.board-group { display: inline-flex; align-items: center; gap: 6px; }
+.board-group .input { width: 140px; }
 .nav-item.sub .sub-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .side .sec { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--muted); padding: 12px 10px 4px; text-transform: uppercase; }
 .side .brand .side-theme { margin-left: auto; }

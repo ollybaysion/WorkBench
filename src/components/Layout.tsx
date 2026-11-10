@@ -1,7 +1,9 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { Fragment } from 'react'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useStore } from '../store'
 import { relTime } from '../lib/util'
 import { CHEATSHEETS } from '../lib/cheatsheets'
+import { groupBoards } from '../lib/boardGroup'
 import CommandPalette from './CommandPalette'
 import { exportBackup } from './backup'
 
@@ -34,6 +36,10 @@ export default function Layout() {
   // 접으면 아이콘만 남는다. 이름은 마우스를 올리면 title 로 보인다
   const mini = !!settings.sideMini
   const tip = (label: string) => (mini ? label : undefined)
+  // 작업판 묶음: 접은 묶음은 이름만 보인다. 지금 연 작업판이 든 묶음은 접어도 강조한다
+  const closed = new Set(settings.sideGroupsClosed ?? [])
+  const toggleGroup = (g: string) => void setSettings({ sideGroupsClosed: closed.has(g) ? [...closed].filter((x) => x !== g) : [...closed, g] })
+  const openId = useLocation().pathname.match(/^\/board\/([^/]+)/)?.[1]
 
   return (
     <div className={'app' + (mini ? ' side-mini' : '')}>
@@ -67,15 +73,31 @@ export default function Layout() {
           <span className="ic">📊</span>
           <span className="lb">작업대</span> <span className="n">{boards.length}</span>
         </NavLink>
-        {/* 작업판 목록: 눌러서 바로 연다. 작업대 화면 위 선택 상자와 같은 가나다순 */}
-        {[...boards]
-          .sort((a, b) => a.title.localeCompare(b.title, 'ko'))
-          .map((b) => (
-            <NavLink key={b.id} to={`/board/${b.id}`} className={(p) => cls(p) + ' sub'} title={b.title}>
-              <span className="sub-t">{b.title}</span>
-              <span className="n">{b.cells.length}</span>
-            </NavLink>
-          ))}
+        {/* 작업판 목록: 묶음 없는 작업판 먼저, 그다음 묶음별. 작업대 화면 위 선택 상자와 같은 순서 */}
+        {groupBoards(boards).map(({ group, boards: list }) => (
+          <Fragment key={group || '-'}>
+            {group && (
+              <button
+                type="button"
+                className={'nav-item sub nav-group' + (closed.has(group) && list.some((b) => b.id === openId) ? ' active' : '')}
+                aria-expanded={!closed.has(group)}
+                onClick={() => toggleGroup(group)}
+                title={group}
+              >
+                <span className="caret">{closed.has(group) ? '▸' : '▾'}</span>
+                <span className="sub-t">{group}</span>
+                <span className="n">{list.length}</span>
+              </button>
+            )}
+            {!(group && closed.has(group)) &&
+              list.map((b) => (
+                <NavLink key={b.id} to={`/board/${b.id}`} className={(p) => cls(p) + ' sub' + (group ? ' in-group' : '')} title={b.title}>
+                  <span className="sub-t">{b.title}</span>
+                  <span className="n">{b.cells.length}</span>
+                </NavLink>
+              ))}
+          </Fragment>
+        ))}
         <button type="button" className="nav-item sub nav-add" onClick={() => void addBoard()}>
           + 새 작업판
         </button>

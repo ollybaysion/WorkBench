@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useStore } from '../store'
+import { groupNames, groupOf } from '../lib/boardGroup'
+import BoardOptions from '../components/board/BoardOptions'
 import type { Board, BoardCell, Card } from '../types'
 import { COLS, append, compact, place } from '../lib/layout'
 import { now, uid } from '../lib/util'
@@ -173,15 +175,12 @@ function BoardEditor({ board }: { board: Board }) {
                     navigate(`/settings/board/${e.target.value}`)
                   }}
                 >
-                  {[...boards].sort(byTitle).map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.title}
-                    </option>
-                  ))}
+                  <BoardOptions boards={boards} />
                 </select>
                 <button type="button" className="btn small" onClick={() => setRenaming(true)}>
                   ✎ 이름 바꾸기
                 </button>
+                <BoardGroupInput key={board.id} board={board} boards={boards} />
               </>
             )}
             <span className="sp" />
@@ -279,6 +278,50 @@ function BoardEditor({ board }: { board: Board }) {
 }
 
 const TITLE_MAX = 60
+const GROUP_MAX = 30
+
+/** 작업판 묶음 이름. Enter 나 칸을 떠날 때 저장한다. 비우면 묶음 없음. 쓰던 묶음 이름을 고를 수 있다 */
+function BoardGroupInput({ board, boards }: { board: Board; boards: Board[] }) {
+  const upsertBoard = useStore((s) => s.upsertBoard)
+  const showToast = useStore((s) => s.showToast)
+  const [value, setValue] = useState(groupOf(board))
+  const save = async () => {
+    const next = value.trim().slice(0, GROUP_MAX)
+    if (next === groupOf(board)) return setValue(next)
+    // 변수 띠가 그 사이 값을 바꿨을 수 있으니 저장소의 최신 작업판에 묶음만 얹는다
+    const b = useStore.getState().boards.find((x) => x.id === board.id) ?? board
+    const { group: _old, ...rest } = b
+    await upsertBoard(next ? { ...rest, group: next } : rest)
+    setValue(next)
+    showToast(next ? `묶음을 "${next}" 로 정했습니다` : '묶음을 비웠습니다')
+  }
+  return (
+    <span className="board-group">
+      <label className="small muted" htmlFor="bedit-group">
+        묶음
+      </label>
+      <input
+        id="bedit-group"
+        className="input"
+        list="bedit-groups"
+        value={value}
+        maxLength={GROUP_MAX}
+        placeholder="없음 · 예: TSUM"
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={() => void save()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur()
+          if (e.key === 'Escape') setValue(groupOf(board))
+        }}
+      />
+      <datalist id="bedit-groups">
+        {groupNames(boards).map((g) => (
+          <option key={g} value={g} />
+        ))}
+      </datalist>
+    </span>
+  )
+}
 
 /** 작업판 이름 바꾸기. Enter 로 저장, Esc 로 취소. 빈 이름은 받지 않는다 */
 function BoardRename({ board, onDone }: { board: Board; onDone: () => void }) {

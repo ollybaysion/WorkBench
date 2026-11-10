@@ -16,6 +16,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import type { Board, BoardCell, Card, CardView, Command, Connection, QueryCard } from '../src/types.ts'
 import { append } from '../src/lib/layout.ts'
+import { groupBoards } from '../src/lib/boardGroup.ts'
 import { extractBinds, pickBinds } from '../src/lib/sql.ts'
 import { UserError, apply, readTable, type Row } from './dataFiles.ts'
 
@@ -137,11 +138,11 @@ const server = new McpServer({ name: 'workbench', version: '1.0.0' })
 
 server.registerTool(
   'list_boards',
-  { description: '작업판 목록. id · 제목 · 카드 수 · 화면 링크' },
+  { description: '작업판 목록. 묶음(group) 별로, 묶음 없는 작업판 먼저. id · 제목 · 카드 수 · 화면 링크' },
   tool(async () =>
-    (await load<Board>('boards'))
-      .sort((a, b) => a.title.localeCompare(b.title, 'ko'))
-      .map((b) => ({ id: b.id, title: b.title, cards: b.cells.length, updatedAt: b.updatedAt, url: boardUrl(b.id) })),
+    groupBoards(await load<Board>('boards')).flatMap(({ group, boards }) =>
+      boards.map((b) => ({ id: b.id, title: b.title, group: group || null, cards: b.cells.length, updatedAt: b.updatedAt, url: boardUrl(b.id) })),
+    ),
   ),
 )
 
@@ -167,6 +168,7 @@ server.registerTool(
     return {
       id: b.id,
       title: b.title,
+      group: b.group ?? null,
       url: boardUrl(b.id),
       vars: b.vars,
       connection: conn ? { id: conn.id, name: conn.name, alias: conn.alias ?? null, picked: conn.id === b.connId } : null,
@@ -187,12 +189,13 @@ server.registerTool(
     description: '새 작업판을 만든다. 카드는 순서대로 4 열 격자에 붙인다. 만든 작업판의 id · 화면 링크를 돌려준다',
     inputSchema: {
       title: z.string().min(1),
+      group: z.string().max(30).optional().describe('기능 묶음 이름(TSUM · EVENT · INTERLOCK 같은). list_boards 의 group 을 다시 쓴다'),
       connection_id: z.string().optional().describe('조회할 연결(list_connections 의 id). 없으면 화면의 기본 규칙(alias 있는 연결 먼저)'),
       vars: z.record(z.string(), z.string()).optional().describe('변수 띠 처음 값. SQL 의 :이름 과 같은 이름'),
       cards: z.array(cardSchema).default([]),
     },
   },
-  tool(async (a: { title: string; connection_id?: string; vars?: Record<string, string>; cards: CardSpec[] }) => {
+  tool(async (a: { title: string; group?: string; connection_id?: string; vars?: Record<string, string>; cards: CardSpec[] }) => {
     await connectionCheck(a.connection_id)
     const { cells, cards, created } = await placeCards([], a.cards)
     const t = now()
@@ -203,6 +206,7 @@ server.registerTool(
       updatedAt: t,
       tags: [],
       title: a.title.trim(),
+      ...(a.group?.trim() ? { group: a.group.trim() } : {}),
       cells,
       // SQL 의 바인드는 빈 값이라도 변수 띠에 둔다
       vars: { ...Object.fromEntries(binds.map((n) => [n, ''])), ...(a.vars ?? {}) },
@@ -268,26 +272,30 @@ server.registerTool(
 server.registerTool(
   'update_board',
   {
-    description: '작업판의 제목 · 변수 값 · 연결을 바꾼다. vars 는 준 이름만 바꾼다',
+    description: '작업판의 제목 · 묶음 · 변수 값 · 연결을 바꾼다. vars 는 준 이름만 바꾼다. group 에 빈 글자를 주면 묶음을 뺀다',
     inputSchema: {
       board_id: z.string(),
       title: z.string().optional(),
+      group: z.string().max(30).optional(),
       vars: z.record(z.string(), z.string()).optional(),
       connection_id: z.string().optional().describe('list_connections 의 id'),
     },
   },
-  tool(async (a: { board_id: string; title?: string; vars?: Record<string, string>; connection_id?: string }) => {
+  tool(async (a: { board_id: string; title?: string; group?: string; vars?: Record<string, string>; connection_id?: string }) => {
     const b = await boardOf(a.board_id)
     await connectionCheck(a.connection_id)
+    const { group: oldGroup, ...rest } = b
+    const group = a.group === undefined ? oldGroup : a.group.trim() || undefined
     const next: Board = {
-      ...b,
+      ...rest,
+      ...(group ? { group } : {}),
       ...(a.title?.trim() ? { title: a.title.trim() } : {}),
       vars: { ...b.vars, ...(a.vars ?? {}) },
       ...(a.connection_id ? { connId: a.connection_id } : {}),
       updatedAt: now(),
     }
     await put('boards', [next])
-    return { board_id: next.id, title: next.title, vars: next.vars, url: boardUrl(next.id) }
+    return { board_id: next.id, title: next.title, group: next.group ?? null, vars: next.vars, url: boardUrl(next.id) }
   }),
 )
 
