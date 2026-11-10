@@ -112,7 +112,7 @@ export default function EditGrid({ cells, selectedId, onSelect, onChange, onLowe
         const ghost = preview?.id === cell.cardId
         const meta =
           card.kind === 'query'
-            ? `⛁ ${card.id} · ${card.connection || '연결 없음'}`
+            ? `⛁ ${card.id}`
             : `⌘ ${card.id} · ${commands.find((c) => c.id === card.commandId)?.title ?? '명령 없음'}`
         return (
           <div

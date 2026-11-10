@@ -134,7 +134,6 @@ interface CardBase extends Base {
 }
 export interface QueryCard extends CardBase {
   kind: 'query'
-  connection: string // 연결 이름(Connection.name). 실제 연결은 작업판이 이름마다 고른다(Board.conns)
   sql: string // 바인드는 `:이름`. 변수 목록은 SQL 에서 자동 추출한다(저장하지 않는다)
   keyColumns: string[] // 비교 때 행을 맞출 열. 지금은 저장만
   view: CardView
@@ -160,8 +159,8 @@ export interface Board extends Base {
   title: string
   cells: BoardCell[]
   vars: Record<string, string> // 변수 띠 값
-  /** 연결 이름 → Connection.id. 작업판마다 따로 고른다. 없으면 lib/conn.ts 의 기본 규칙 */
-  conns?: Record<string, string>
+  /** 이 작업판이 조회할 연결(Connection.id). 조회 카드는 모두 이 연결로 조회한다. 없으면 lib/conn.ts 의 기본 규칙 */
+  connId?: string
 }
 
 export interface Column {

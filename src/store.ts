@@ -4,7 +4,7 @@ import type { Command, Runbook, RunbookRun, EnvPreset, Settings, ExportBundle, C
 import { seedCommands, seedEnvs, seedRunbooks } from './lib/seed'
 import { seedBoardCommands, seedBoards, seedCards, seedConnections, seedFdcBoard, seedFdcCards, seedFdcConnections, seedTsumBoard, seedTsumCards } from './lib/seedBoard'
 import { now, uid } from './lib/util'
-import { migrateBoards, migrateCards } from './lib/conn'
+import { migrateConns } from './lib/conn'
 
 const defaultSettings: Settings = { theme: 'system', userName: '', activeEnvId: 'env_prod' }
 
@@ -136,20 +136,18 @@ export const useStore = create<State>((set, get) => ({
       db.boards.toArray(),
       db.kv.get('settings'),
     ])
-    // 예전 카드(connectionId)를 연결 이름으로 옮긴다. 예전 백업 파일을 가져온 뒤에도 이 길을 탄다
+    // 예전 저장 모양(카드마다 연결)을 작업판마다 연결 하나로 옮긴다. 예전 백업 파일을 가져온 뒤에도 이 길을 탄다
     let cards = loadedCards
     let boards = loadedBoards
-    const fixedCards = migrateCards(cards, connections)
-    if (fixedCards.length) {
-      const ids = new Set(fixedCards.map((c) => c.id))
-      const fixedBoards = migrateBoards(boards, cards.filter((c) => ids.has(c.id)), connections)
+    const fixed = migrateConns(cards, boards, connections, envs)
+    if (fixed.cards.length || fixed.boards.length) {
       await db.transaction('rw', [db.cards, db.boards], async () => {
-        await db.cards.bulkPut(fixedCards)
-        await db.boards.bulkPut(fixedBoards)
+        await db.cards.bulkPut(fixed.cards)
+        await db.boards.bulkPut(fixed.boards)
       })
-      const replace = <T extends { id: string }>(all: T[], fixed: T[]) => all.map((x) => fixed.find((f) => f.id === x.id) ?? x)
-      cards = replace(cards, fixedCards)
-      boards = replace(boards, fixedBoards)
+      const replace = <T extends { id: string }>(all: T[], next: T[]) => all.map((x) => next.find((f) => f.id === x.id) ?? x)
+      cards = replace(cards, fixed.cards)
+      boards = replace(boards, fixed.boards)
     }
     set({
       ready: true,
@@ -221,10 +219,10 @@ export const useStore = create<State>((set, get) => ({
     set({ connections: sortByUpdated([c, ...get().connections.filter((x) => x.id !== c.id)]) })
   },
   deleteConnection: async (id) => {
-    // 이 연결을 고른 작업판은 선택을 비운다(같은 이름의 다른 연결로 넘어간다)
+    // 이 연결을 고른 작업판은 선택을 비운다(기본 규칙의 연결로 넘어간다)
     const touched = get()
-      .boards.filter((b) => Object.values(b.conns ?? {}).includes(id))
-      .map((b) => ({ ...b, conns: Object.fromEntries(Object.entries(b.conns ?? {}).filter(([, v]) => v !== id)), updatedAt: now() }))
+      .boards.filter((b) => b.connId === id)
+      .map(({ connId: _c, ...b }) => ({ ...b, updatedAt: now() }))
     await db.transaction('rw', [db.connections, db.boards], async () => {
       await db.connections.delete(id)
       await db.boards.bulkPut(touched)

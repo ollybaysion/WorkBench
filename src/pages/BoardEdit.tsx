@@ -4,7 +4,7 @@ import { useStore } from '../store'
 import type { Board, BoardCell, Card } from '../types'
 import { COLS, append, compact, place } from '../lib/layout'
 import { now, uid } from '../lib/util'
-import { connNames } from '../lib/conn'
+import { resolveConn } from '../lib/conn'
 import Topbar from '../components/Topbar'
 import SettingsTabs from '../components/SettingsTabs'
 import EditGrid from '../components/board/EditGrid'
@@ -45,6 +45,7 @@ function BoardEditor({ board }: { board: Board }) {
   const boards = useStore((s) => s.boards)
   const cards = useStore((s) => s.cards)
   const connections = useStore((s) => s.connections)
+  const envs = useStore((s) => s.envs)
   const upsertBoard = useStore((s) => s.upsertBoard)
   const deleteBoard = useStore((s) => s.deleteBoard)
   const upsertCard = useStore((s) => s.upsertCard)
@@ -107,7 +108,6 @@ function BoardEditor({ board }: { board: Board }) {
       tags: [],
       kind: 'query',
       title: '',
-      connection: connNames(connections)[0] ?? '',
       sql: '',
       keyColumns: [],
       view: { kind: 'table' },
@@ -258,7 +258,7 @@ function BoardEditor({ board }: { board: Board }) {
               isNew={!!draftSel}
               size={size}
               boardVars={board.vars}
-              boardConns={board.conns}
+              boardConn={resolveConn(board, connections, envs)}
               onSave={save}
               onCancel={() => {
                 dirty.current = false

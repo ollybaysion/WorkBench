@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { Board, Card, CardView, ChartType, Limits } from '../../types'
+import type { Card, CardView, ChartType, Connection, Limits } from '../../types'
 import { formatPicks, parsePicks, type Marks } from '../../lib/marks'
 import { runner, type QueryState } from '../../lib/runner'
 import { extractBinds, pickBinds } from '../../lib/sql'
 import { render } from '../../lib/template'
 import { now } from '../../lib/util'
-import { connNames, resolveConn } from '../../lib/conn'
 import { useStore } from '../../store'
 import { RISK_LABEL, RISK_PILL } from '../vars'
 import { QueryBody, QueryFoot } from './QueryCardView'
@@ -30,7 +29,6 @@ interface Draft {
   kind: Card['kind']
   title: string
   description: string
-  connection: string
   sql: string
   view: CardView['kind']
   chartType: ChartType
@@ -56,7 +54,6 @@ function toDraft(c: Card): Draft {
     kind: c.kind,
     title: c.title,
     description: c.description ?? '',
-    connection: q?.connection ?? '',
     sql: q?.sql ?? '',
     view: chart ? 'chart' : 'table',
     chartType: chart?.type ?? 'line',
@@ -115,7 +112,6 @@ function fromDraft(d: Draft, base: Card): Card {
   return {
     ...common,
     kind: 'query',
-    connection: d.connection,
     sql: d.sql,
     keyColumns: base.kind === 'query' ? base.keyColumns : [],
     view: viewOf(d),
@@ -125,10 +121,9 @@ function fromDraft(d: Draft, base: Card): Card {
 }
 
 /** 저장을 막는 첫 문제. 없으면 undefined */
-function problemOf(d: Draft, names: string[], cmdIds: string[]): string | undefined {
+function problemOf(d: Draft, cmdIds: string[]): string | undefined {
   if (!d.title.trim()) return '제목을 넣으세요'
   if (d.kind === 'command') return cmdIds.includes(d.commandId) ? undefined : '명령을 고르세요'
-  if (!names.includes(d.connection)) return '연결을 고르세요'
   if (!d.sql.trim()) return 'SQL 을 넣으세요'
   if (d.view === 'chart' && (!d.x.trim() || splitCols(d.y).length === 0)) return '그래프의 x 열과 y 열을 넣으세요'
   if (d.view === 'table' && (d.lcl.trim() || d.ucl.trim()) && !d.limValue.trim()) return '표는 한계와 견줄 값 열을 넣으세요'
@@ -153,8 +148,8 @@ interface Props {
   /** 작업판 위 크기. 보관함 카드는 undefined */
   size?: { w: number; h: number }
   boardVars: Record<string, string>
-  /** 미리보기가 쓸 연결 선택(작업판의 연결 띠) */
-  boardConns: Board['conns']
+  /** 미리보기가 쓸 연결(작업판의 연결 띠) */
+  boardConn?: Connection
   onSave: (card: Card) => Promise<void>
   onCancel: () => void
   onDelete: () => void
@@ -164,10 +159,8 @@ interface Props {
 }
 
 /** 카드 폼(W4 조회 · W9 명령). 크기는 작업판에 바로 반영하고, 나머지는 저장할 때 반영한다 */
-export default function CardForm({ card, isNew, size, boardVars, boardConns, onSave, onCancel, onDelete, onDuplicate, onSize, onDirty }: Props) {
-  const connections = useStore((s) => s.connections)
+export default function CardForm({ card, isNew, size, boardVars, boardConn, onSave, onCancel, onDelete, onDuplicate, onSize, onDirty }: Props) {
   const commands = useStore((s) => s.commands)
-  const envs = useStore((s) => s.envs)
   const env = useStore((s) => s.activeEnv())
   const [initial] = useState(() => toDraft(card))
   const [d, setD] = useState(initial)
@@ -179,10 +172,8 @@ export default function CardForm({ card, isNew, size, boardVars, boardConns, onS
   useEffect(() => onDirty(dirty), [dirty, onDirty])
 
   const set = (patch: Partial<Draft>) => setD((x) => ({ ...x, ...patch }))
-  const names = connNames(connections)
   const problem = problemOf(
     d,
-    names,
     commands.map((c) => c.id),
   )
   const binds = d.kind === 'query' ? extractBinds(d.sql) : []
@@ -190,7 +181,7 @@ export default function CardForm({ card, isNew, size, boardVars, boardConns, onS
   const previewView: CardView | undefined = d.view === 'chart' ? viewOf(d) : undefined
   const previewMarks: Marks = { vars: boardVars, picks: parsePicks(d.picks), limits: limitsOf(d) }
   const cmd = d.kind === 'command' ? commands.find((c) => c.id === d.commandId) : undefined
-  const previewConn = d.kind === 'query' ? resolveConn(d.connection, { conns: boardConns }, connections, envs) : undefined
+  const previewConn = d.kind === 'query' ? boardConn : undefined
 
   const runPreview = () => {
     const next = fromDraft(d, card)
@@ -254,22 +245,6 @@ export default function CardForm({ card, isNew, size, boardVars, boardConns, onS
 
       {d.kind === 'query' ? (
         <>
-          <label className="field">
-            연결 (이름)
-            <select value={d.connection} onChange={(e) => set({ connection: e.target.value })}>
-              <option value="">고르세요</option>
-              {names.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-            <span className="small muted">
-              {previewConn?.alias
-                ? `이 작업판에서는 agent-db ${previewConn.alias} 로 조회합니다. alias 는 작업대의 연결 띠에서 바꿉니다.`
-                : '이 작업판에서는 가짜 결과를 씁니다. 설정 › DB 연결에서 alias 에 이 이름을 붙이세요.'}
-            </span>
-          </label>
           <label className="field">
             SQL (바인드는 :이름)
             <textarea className="mono" rows={7} value={d.sql} onChange={(e) => set({ sql: e.target.value })} spellCheck={false} />

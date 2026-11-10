@@ -104,9 +104,9 @@ function BoardView({ board }: { board: Board }) {
     for (const c of queryCards) for (const b of extractBinds(c.sql)) if (!out.includes(b)) out.push(b)
     return out
   }, [queryCards])
-  // 연결 띠: 조회 카드가 쓰는 연결 이름. 작업판이 이름마다 실제 연결을 고른다
-  const connNamesUsed = useMemo(() => [...new Set(queryCards.map((c) => c.connection))], [queryCards])
-  const connOf = useCallback((card: Card) => (card.kind === 'query' ? resolveConn(card.connection, { conns: board.conns }, connections, envs) : undefined), [board.conns, connections, envs])
+  // 연결 띠: 작업판이 고른 연결 하나. 조회 카드는 모두 이 연결로 조회한다
+  const conn = useMemo(() => resolveConn(board, connections, envs), [board, connections, envs])
+  const connOf = useCallback((card: Card) => (card.kind === 'query' ? conn : undefined), [conn])
 
   /** 이 키가 마지막 조회와 다르면 결과가 낡았다(변수 · alias · SQL 이 바뀜) */
   const keyOf = useCallback(
@@ -122,7 +122,7 @@ function BoardView({ board }: { board: Board }) {
       const n = startRun(boardId, card.id, keyOf(card))
       put(card.id, { status: 'loading' })
       const conn = connOf(card)
-      const p = conn ? runner.run(card, conn, pickBinds(card.sql, board.vars)) : Promise.reject(new Error(`연결 ${card.connection || '(없음)'} 이 없습니다. 설정 › DB 연결에서 만드세요`))
+      const p = conn ? runner.run(card, conn, pickBinds(card.sql, board.vars)) : Promise.reject(new Error('연결이 없습니다. 설정 › DB 연결에서 만드세요'))
       p.then(
         (result) => {
           if (isLatest(boardId, card.id, n)) put(card.id, { status: 'ok', result, at: now() })
@@ -162,9 +162,9 @@ function BoardView({ board }: { board: Board }) {
     [board.id, upsertBoard],
   )
   const pickConn = useCallback(
-    (name: string, connId: string) => {
+    (connId: string) => {
       const b = useStore.getState().boards.find((x) => x.id === board.id)
-      if (b) void upsertBoard({ ...b, conns: { ...b.conns, [name]: connId } })
+      if (b) void upsertBoard({ ...b, connId })
     },
     [board.id, upsertBoard],
   )
@@ -214,7 +214,7 @@ function BoardView({ board }: { board: Board }) {
             ✎ 편집
           </Link>
         </Topbar>
-        <ConnBand names={connNamesUsed} connOf={(name) => resolveConn(name, { conns: board.conns }, connections, envs)} onPick={pickConn} />
+        {queryCards.length > 0 && <ConnBand conn={conn} onPick={pickConn} />}
         <VarBand names={bindNames} vars={board.vars} onSave={saveVars} picked={picked} onTouch={touchVar} />
       </div>
       <BoardGrid cells={cells} connOf={connOf} runs={runs} stale={stale} onRun={runCard} boardVars={board.vars} checks={checks} onChecks={setCardChecks} selectedId={selectedId} onOpen={open} onPick={pickVars} />
