@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { db } from './db'
-import type { Command, Runbook, RunbookRun, EnvPreset, Settings, ExportBundle, Connection, Card, Board } from './types'
+import type { Command, Runbook, RunbookRun, EnvPreset, Settings, ExportBundle, Connection, Card, Board, BoardSnapshot } from './types'
 import { seedCommands, seedEnvs, seedRunbooks } from './lib/seed'
 import { seedBoardCommands, seedBoards, seedCards, seedConnections, seedFdcBoard, seedFdcCards, seedFdcConnections, seedTsumBoard, seedTsumCards } from './lib/seedBoard'
 import { now, uid } from './lib/util'
@@ -18,6 +18,7 @@ interface State {
   connections: Connection[]
   cards: Card[]
   boards: Board[]
+  snapshots: BoardSnapshot[]
   settings: Settings
   toast: string | null
   paletteOpen: boolean
@@ -47,6 +48,8 @@ interface State {
   /** 빈 작업판을 만든다. 이름은 "새 작업판", 겹치면 뒤에 번호를 붙인다 */
   createBoard: () => Promise<Board>
   deleteBoard: (id: string) => Promise<void>
+  upsertSnapshot: (s: BoardSnapshot) => Promise<void>
+  deleteSnapshot: (id: string) => Promise<void>
 
   activeEnv: () => EnvPreset | undefined
   exportBundle: () => ExportBundle
@@ -67,7 +70,7 @@ function sortByUpdated<T extends { updatedAt: string }>(arr: T[]): T[] {
 }
 
 // 옛 notes · tasks 테이블은 넣지 않는다. 가져오기(교체) · 초기화가 그 데이터를 지우지 않게 한다
-const ALL_TABLES = [db.commands, db.runbooks, db.runs, db.envs, db.connections, db.cards, db.boards, db.kv]
+const ALL_TABLES = [db.commands, db.runbooks, db.runs, db.envs, db.connections, db.cards, db.boards, db.snapshots, db.kv]
 
 export const useStore = create<State>((set, get) => ({
   ready: false,
@@ -78,6 +81,7 @@ export const useStore = create<State>((set, get) => ({
   connections: [],
   cards: [],
   boards: [],
+  snapshots: [],
   settings: defaultSettings,
   toast: null,
   paletteOpen: false,
@@ -152,7 +156,7 @@ export const useStore = create<State>((set, get) => ({
         await db.kv.put({ key: 'seededTsum', value: true })
       })
     }
-    const [commands, runbooks, runs, envs, connections, loadedCards, loadedBoards, s] = await Promise.all([
+    const [commands, runbooks, runs, envs, connections, loadedCards, loadedBoards, snapshots, s] = await Promise.all([
       db.commands.toArray(),
       db.runbooks.toArray(),
       db.runs.toArray(),
@@ -160,6 +164,7 @@ export const useStore = create<State>((set, get) => ({
       db.connections.toArray(),
       db.cards.toArray(),
       db.boards.toArray(),
+      db.snapshots.toArray(),
       db.kv.get('settings'),
     ])
     // 예전 저장 모양(카드마다 연결)을 작업판마다 연결 하나로 옮긴다. 예전 백업 파일을 가져온 뒤에도 이 길을 탄다
@@ -185,6 +190,7 @@ export const useStore = create<State>((set, get) => ({
       connections: sortByUpdated(connections),
       cards: sortByUpdated(cards),
       boards: sortByUpdated(boards),
+      snapshots: sortByUpdated(snapshots),
       settings: { ...defaultSettings, ...((s?.value as Partial<Settings>) ?? {}) },
     })
   },
@@ -321,6 +327,15 @@ export const useStore = create<State>((set, get) => ({
     set({ boards: get().boards.filter((x) => x.id !== id) })
   },
 
+  upsertSnapshot: async (x) => {
+    await db.snapshots.put(x)
+    set({ snapshots: sortByUpdated([x, ...get().snapshots.filter((y) => y.id !== x.id)]) })
+  },
+  deleteSnapshot: async (id) => {
+    await db.snapshots.delete(id)
+    set({ snapshots: get().snapshots.filter((x) => x.id !== id) })
+  },
+
   activeEnv: () => {
     const { envs, settings } = get()
     return envs.find((e) => e.id === settings.activeEnvId) ?? envs[0]
@@ -340,6 +355,7 @@ export const useStore = create<State>((set, get) => ({
       connections: s.connections,
       cards: s.cards,
       boards: s.boards,
+      snapshots: s.snapshots,
     }
   },
 
@@ -358,6 +374,7 @@ export const useStore = create<State>((set, get) => ({
       await db.connections.bulkPut(b.connections ?? [])
       await db.cards.bulkPut(b.cards ?? [])
       await db.boards.bulkPut(b.boards ?? [])
+      await db.snapshots.bulkPut(b.snapshots ?? [])
       // 읽기 토큰은 파일에서 받지 않는다. 지금 브라우저의 토큰을 그대로 둔다.
       if (mode === 'replace' && b.settings) await db.kv.put({ key: 'settings', value: { ...withoutToken(b.settings), ...keepToken } })
       await db.kv.put({ key: 'seeded', value: true })

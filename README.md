@@ -69,12 +69,13 @@ npm run lint
 
 - **저장 위치**: `npm run dev` · `npm run preview` 로 켜면 개발 서버가 저장 폴더에 항목마다 JSON 파일 하나를 씁니다(`server/fileStore.ts`).
   - 폴더: 기본 `~/.workbench/data`. 환경 변수 `WORKBENCH_DATA` 로 바꿉니다. 서버를 켤 때 터미널에 `[file-store] 저장 폴더 …` 로 보입니다.
-  - 모양: `<저장 폴더>/<boards|cards|commands|runbooks|runs|connections|envs|kv>/<id>.json`
+  - 모양: `<저장 폴더>/<boards|cards|commands|runbooks|runs|connections|envs|snapshots|kv>/<id>.json`
   - 앱을 켤 때 파일을 읽습니다. 브라우저 · 주소가 달라도 같은 파일을 봅니다.
   - 개발 서버(`npm run dev`)는 저장 폴더를 지켜봅니다. 다른 프로그램(MCP 서버 · 편집기)이 파일을 바꾸면 열어 둔 화면이 그 테이블을 바로 다시 읽습니다.
   - 설정과 AKG 읽기 토큰은 브라우저(IndexedDB)에만 둡니다.
   - 파일에 쓰지 못한 변경(서버가 꺼졌을 때 등)은 다음에 켤 때 파일에 합칩니다. `updatedAt` 이 더 새로운 쪽을 남깁니다. 그동안 지운 항목은 파일에 남아 다시 보입니다.
   - `dist/index.html` 을 `file://` 로 열거나 GitHub Pages 에서는 개발 서버가 없으므로 브라우저의 IndexedDB(`workbench` DB)에만 저장합니다.
+- **저장한 화면**: 작업판의 **📷 화면 저장** 은 그 시각의 변수 · 연결 · 배치 · 카드 · 조회 결과를 `snapshots/` 에 남깁니다. 작업판 위 **저장한 화면** 목록에서 열면 다시 조회하지 않고 읽기 전용으로 봅니다.
 - **백업**: 사이드바 하단 또는 설정의 **JSON 내보내기**를 누르면 `workbench-backup-YYYY-MM-DD.json`이 내려받아지고 마지막 백업 시각이 기록됩니다. 대시보드에서 백업 상태를 확인할 수 있습니다.
 - **복원 / 가져오기**: 설정 → **JSON 가져오기**
   - *병합*: 같은 ID는 파일 내용으로 덮어쓰고 나머지는 유지합니다.
@@ -87,7 +88,8 @@ npm run lint
 opencode 같은 agent 가 작업판을 만들고, 작업판의 SQL 로 화면과 같은 데이터를 다시 조회해 분석합니다.
 
 - **MCP 서버**: `server/mcp.ts`(stdio). 개발 서버와 같은 저장 폴더를 읽고 씁니다. Node 22.18 이상이 타입을 지우고 바로 돌립니다(`npm run mcp`).
-  - 도구: `list_boards` · `list_connections` · `get_board` · `create_board` · `add_cards` · `update_card` · `update_board`. 지우는 도구는 없습니다.
+  - 도구: `list_boards` · `list_connections` · `get_board` · `create_board` · `add_cards` · `update_card` · `update_board` · `list_snapshots` · `get_snapshot`. 지우는 도구는 없습니다.
+  - `get_snapshot` 은 작업판의 "📷 화면 저장" 으로 남긴 그 시각의 변수 · 바인드 값 · 조회 결과를 줍니다. 다시 조회하지 않고 사람이 본 데이터로 분석합니다.
   - `get_board` 는 카드마다 SQL · 바인드 값 · 연결의 agent-db alias 를 줍니다. agent 는 agent-db MCP 의 `run_query` 로 같은 데이터를 받습니다.
   - 환경 변수: `WORKBENCH_DATA`(저장 폴더, 개발 서버와 같게) · `WORKBENCH_URL`(작업판 링크의 화면 주소, 기본 `http://127.0.0.1:5173`)
 - **skill**: `skills/workbench-board/SKILL.md`. 도구 쓰는 순서 · 카드 모양 · 그래프 종류별 열 · 바인드 규칙을 적었습니다. opencode 스킬 폴더(`~/.config/opencode/skills/` 또는 프로젝트의 `.opencode/skills/`)에 링크합니다.

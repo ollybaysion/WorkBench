@@ -325,6 +325,9 @@ pre.code { background: var(--code-bg); color: var(--code-text); padding: 12px 14
 .board-sticky { position: sticky; top: 0; z-index: 20; background: var(--bg); margin: -20px -24px 12px; padding: 20px 24px 0; }
 .board-sticky .topbar { margin-bottom: 10px; }
 .board-select { font-size: 20px; font-weight: 700; width: auto; padding: 2px 8px; }
+.snap-select { width: auto; max-width: 260px; }
+.snap-band .vpill { padding-right: 10px; }
+.snap-band .vpill .v { font-size: 13px; font-weight: 600; color: var(--text); }
 .vband { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 12px; border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius); margin-bottom: 12px; }
 .vband .lbl { font-size: 11px; font-weight: 700; letter-spacing: .06em; color: var(--muted); margin-right: 4px; }
 .vpill { display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 4px 0 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); }

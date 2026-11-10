@@ -25,6 +25,8 @@ WorkBench 는 Oracle 조회 카드를 4 열 격자에 놓고 함께 보는 화�
 | `add_cards` | 작업판 아래에 카드를 붙인다(새 카드 또는 `card_id` 로 보관함 카드) |
 | `update_card` | 카드의 제목 · SQL · 보기 · 고르기 · 한계를 고친다 |
 | `update_board` | 작업판의 제목 · 변수 값 · 연결을 바꾼다 |
+| `list_snapshots` | 저장한 화면 목록(사람이 "📷 화면 저장" 으로 남긴 것) |
+| `get_snapshot` | 저장한 화면 하나: 그때 변수 · 바인드 값 · 카드마다 조회 결과(열 · 행) |
 
 개발 서버(`npm run dev`)가 켜져 있으면 열어 둔 화면이 바뀐 작업판을 바로 보인다.
 
@@ -93,7 +95,12 @@ where ts >= to_timestamp(:from, 'YYYY-MM-DD HH24:MI:SS')
 
 ## 작업판 데이터 분석하기
 
-화면의 조회 결과는 파일에 남지 않는다. 같은 데이터는 다시 조회해서 얻는다.
+사람이 "저장한 화면", "아까 본 그 결과"를 말하면 저장한 화면을 쓴다. 다시 조회하지 않으므로 사람이 본 데이터와 같다.
+
+1. `list_snapshots` 로 고른다(`board_id` 로 좁힌다).
+2. `get_snapshot` 으로 카드마다 열 · 행을 받는다. 행이 많으면 `card_id` 로 카드 하나씩, `max_rows` 를 늘려 받는다(끝 1000).
+
+저장한 화면이 없으면 다시 조회한다. 열어 둔 화면의 결과는 파일에 남지 않는다.
 
 1. `get_board` 로 작업판을 읽는다.
 2. `connection.alias` 를 확인한다. `null` 이면 화면이 가짜 결과를 쓰는 연결이다. 사용자에게 알리고 멈춘다.
@@ -113,4 +120,5 @@ where ts >= to_timestamp(:from, 'YYYY-MM-DD HH24:MI:SS')
 
 - `boards/<id>.json`: `title` · `cells`(`cardId` · `x` · `y` · `w` · `h`) · `vars` · `connId`
 - `cards/<id>.json`: `title` · `sql` · `view` · `picks` · `limits`
+- `snapshots/<id>.json`: `title` · `boardId` · `vars` · `conn` · `cells` · `cards` · `results`(카드 id → 결과)
 - `connections/<id>.json`: `name` · `alias`

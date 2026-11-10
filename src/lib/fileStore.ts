@@ -9,7 +9,7 @@
  */
 import type { DBCore, DBCoreMutateRequest, DBCoreMutateResponse, Middleware } from 'dexie'
 
-export const FILE_TABLES = ['commands', 'runbooks', 'runs', 'envs', 'connections', 'cards', 'boards', 'kv'] as const
+export const FILE_TABLES = ['commands', 'runbooks', 'runs', 'envs', 'connections', 'cards', 'boards', 'snapshots', 'kv'] as const
 export type FileTable = (typeof FILE_TABLES)[number]
 /** 브라우저에만 두는 kv 키. 설정은 AKG 읽기 토큰을 품는다 */
 export const LOCAL_KV = new Set(['settings'])

@@ -14,7 +14,7 @@ import { randomUUID } from 'node:crypto'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
-import type { Board, BoardCell, Card, CardView, Command, Connection, QueryCard } from '../src/types.ts'
+import type { Board, BoardCell, BoardSnapshot, Card, CardView, Command, Connection, QueryCard } from '../src/types.ts'
 import { append } from '../src/lib/layout.ts'
 import { extractBinds, pickBinds } from '../src/lib/sql.ts'
 import { UserError, apply, readTable, type Row } from './dataFiles.ts'
@@ -70,7 +70,7 @@ const tool =
     }
   }
 
-const load = async <T>(t: 'boards' | 'cards' | 'connections' | 'commands') => (await readTable(t)) as unknown as T[]
+const load = async <T>(t: 'boards' | 'cards' | 'connections' | 'commands' | 'snapshots') => (await readTable(t)) as unknown as T[]
 const put = (table: 'boards' | 'cards', rows: unknown[]) => apply([{ op: 'put', table, rows: rows as Row[] }])
 
 async function boardOf(id: string): Promise<Board> {
@@ -288,6 +288,62 @@ server.registerTool(
     }
     await put('boards', [next])
     return { board_id: next.id, title: next.title, vars: next.vars, url: boardUrl(next.id) }
+  }),
+)
+
+server.registerTool(
+  'list_snapshots',
+  { description: '저장한 화면 목록. 사람이 작업판에서 "📷 화면 저장" 으로 남긴 그 시각의 변수 · 조회 결과', inputSchema: { board_id: z.string().optional().describe('이 작업판 것만') } },
+  tool(async ({ board_id }: { board_id?: string }) =>
+    (await load<BoardSnapshot>('snapshots'))
+      .filter((x) => !board_id || x.boardId === board_id)
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+      .map((x) => ({ id: x.id, title: x.title, boardId: x.boardId, boardTitle: x.boardTitle, savedAt: x.createdAt, cards: Object.keys(x.results).length, url: `${APP_URL}/#/snapshot/${x.id}` })),
+  ),
+)
+
+server.registerTool(
+  'get_snapshot',
+  {
+    description: '저장한 화면 하나. 카드마다 SQL · 그때 넣은 바인드 값 · 조회 결과(열 · 행)를 준다. 다시 조회하지 않고 사람이 본 그 데이터로 분석할 때 쓴다',
+    inputSchema: {
+      snapshot_id: z.string(),
+      card_id: z.string().optional().describe('이 카드만'),
+      max_rows: z.number().int().min(0).max(1000).default(200).describe('카드마다 돌려줄 행 수의 끝. 넘으면 truncated'),
+    },
+  },
+  tool(async (a: { snapshot_id: string; card_id?: string; max_rows: number }) => {
+    const x = (await load<BoardSnapshot>('snapshots')).find((y) => y.id === a.snapshot_id)
+    if (!x) throw new UserError(`저장한 화면 ${a.snapshot_id} 이 없습니다. list_snapshots 로 id 를 확인하세요`)
+    return {
+      id: x.id,
+      title: x.title,
+      savedAt: x.createdAt,
+      board: { id: x.boardId, title: x.boardTitle },
+      vars: x.vars,
+      connection: x.conn ?? null,
+      cards: x.cells.flatMap((cell): Row[] => {
+        const c = x.cards.find((y) => y.id === cell.cardId)
+        if (!c || c.kind !== 'query' || (a.card_id && c.id !== a.card_id)) return []
+        const r = x.results[c.id]
+        const base = { id: c.id, title: c.title, sql: c.sql, view: c.view, cell: { x: cell.x, y: cell.y, w: cell.w, h: cell.h } }
+        if (!r) return [{ ...base, status: 'not_run' }]
+        if (r.status === 'error') return [{ ...base, status: 'error', message: r.message, at: r.at, binds: r.binds }]
+        const rows = r.result.rows
+        return [
+          {
+            ...base,
+            status: 'ok',
+            at: r.at,
+            binds: r.binds,
+            columns: r.result.columns,
+            rowCount: rows.length,
+            rows: rows.slice(0, a.max_rows),
+            truncated: rows.length > a.max_rows || r.result.truncated,
+          },
+        ]
+      }),
+    }
   }),
 )
 

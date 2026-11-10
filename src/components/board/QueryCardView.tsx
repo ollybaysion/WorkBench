@@ -94,8 +94,8 @@ export function QueryBody({ run, compact, maxRows, view, records, onRun, marks }
   return <ResultTable result={run.result} compact={compact} maxRows={maxRows} marks={marks} />
 }
 
-export function QueryFoot({ run, hint }: { run?: QueryState; hint?: string }) {
-  if (!run) return <span>조회 전 · ▶ 를 누르면 조회합니다</span>
+export function QueryFoot({ run, hint, readOnly }: { run?: QueryState; hint?: string; readOnly?: boolean }) {
+  if (!run) return <span>{readOnly ? '저장할 때 조회하지 않은 카드' : '조회 전 · ▶ 를 누르면 조회합니다'}</span>
   if (run.status === 'loading') return <span>조회 중…</span>
   if (run.status === 'error') return <span className="err">오류</span>
   return (
@@ -129,7 +129,8 @@ export default function QueryCardView({
   selected: boolean
   vars: Record<string, string>
   onOpen: () => void
-  onRun: () => void
+  /** 없으면 읽기 전용 */
+  onRun?: () => void
   onPick: (patch: Record<string, string>) => void
 }) {
   const bodyRef = useRef<HTMLDivElement>(null)
@@ -155,19 +156,21 @@ export default function QueryCardView({
         </span>
         <ModeSeg mode={mode} chart={chart} onMode={setMode} chartType={card.view.kind === 'chart' ? card.view.type : undefined} />
         <QueryStatus run={run} />
-        <button
-          type="button"
-          className="qc-xp qc-run"
-          title={run ? '다시 조회' : '조회'}
-          aria-label={run ? '다시 조회' : '조회'}
-          disabled={run?.status === 'loading'}
-          onClick={(e) => {
-            e.stopPropagation()
-            onRun()
-          }}
-        >
-          ▶
-        </button>
+        {onRun && (
+          <button
+            type="button"
+            className="qc-xp qc-run"
+            title={run ? '다시 조회' : '조회'}
+            aria-label={run ? '다시 조회' : '조회'}
+            disabled={run?.status === 'loading'}
+            onClick={(e) => {
+              e.stopPropagation()
+              onRun()
+            }}
+          >
+            ▶
+          </button>
+        )}
         <button
           type="button"
           className="qc-xp"
@@ -185,7 +188,7 @@ export default function QueryCardView({
         <QueryBody run={run} compact maxRows={maxRows} view={mode === 'chart' ? card.view : undefined} records={mode === 'records'} onRun={onRun} marks={marks} />
       </div>
       <div className="qc-foot">
-        {stale ? (
+        {stale && onRun ? (
           <button
             type="button"
             className="qc-stale"
@@ -198,7 +201,7 @@ export default function QueryCardView({
             ⟳ 변수가 바뀜 · 다시 조회
           </button>
         ) : (
-          <QueryFoot run={run} hint={mode === 'records' ? undefined : pickHint(card)} />
+          <QueryFoot run={run} hint={mode === 'records' || !onRun ? undefined : pickHint(card)} readOnly={!onRun} />
         )}
       </div>
     </article>

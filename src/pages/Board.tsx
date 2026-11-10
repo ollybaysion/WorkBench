@@ -1,11 +1,11 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store'
-import type { Board, Card, QueryCard } from '../types'
+import type { Board, BoardSnapshot, Card, QueryCard, SnapResult } from '../types'
 import { runner, type QueryState } from '../lib/runner'
 import { extractBinds, pickBinds } from '../lib/sql'
 import { resolveConn } from '../lib/conn'
-import { fmtTime, now } from '../lib/util'
+import { fmtDate, fmtTime, now, uid } from '../lib/util'
 import Topbar from '../components/Topbar'
 import VarBand from '../components/board/VarBand'
 import ConnBand from '../components/board/ConnBand'
@@ -77,6 +77,8 @@ function BoardView({ board }: { board: Board }) {
   const connections = useStore((s) => s.connections)
   const envs = useStore((s) => s.envs)
   const upsertBoard = useStore((s) => s.upsertBoard)
+  const upsertSnapshot = useStore((s) => s.upsertSnapshot)
+  const allSnaps = useStore((s) => s.snapshots)
   const showToast = useStore((s) => s.showToast)
   // 카드에서 눌러 넣은 변수 이름(이 화면에서만). 변수 띠에서 파랗게 보인다
   const [picked, setPicked] = useState<string[]>([])
@@ -181,6 +183,43 @@ function BoardView({ board }: { board: Board }) {
     },
     [board.id, upsertBoard, showToast],
   )
+  // 저장한 화면: 이 작업판 것만, 최근 것 먼저
+  const snaps = useMemo(() => allSnaps.filter((x) => x.boardId === board.id).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)), [allSnaps, board.id])
+
+  /** 지금 화면(변수 · 연결 · 배치 · 카드 · 조회 결과)을 저장한다. 나중에 다시 조회하지 않고 그대로 본다 */
+  const saveSnapshot = async () => {
+    const results: Record<string, SnapResult> = {}
+    for (const { card } of cells) {
+      const r = runs[card.id]
+      if (!r || r.status === 'loading') continue
+      // 마지막 조회의 키 [연결 id, alias, sql, 바인드 값] 에서 그때 넣은 바인드 값을 꺼낸다
+      const key = lastKey(boardId, card.id)
+      const binds = key ? (JSON.parse(key) as unknown[])[3] : undefined
+      results[card.id] = { ...r, ...(binds && typeof binds === 'object' ? { binds: binds as Record<string, string> } : {}) }
+    }
+    if (Object.keys(results).length === 0) return showToast('조회한 카드가 없습니다. 조회한 뒤 저장하세요')
+    if (staleCount > 0 && !window.confirm(`변수가 바뀐 뒤 다시 조회하지 않은 카드가 ${staleCount} 장 있습니다. 그 카드는 예전 결과로 저장합니다. 저장할까요?`)) return
+    const t = now()
+    const name = window.prompt('저장할 이름', `${board.title} · ${fmtDate(t)}`)
+    if (name === null) return
+    const snap: BoardSnapshot = {
+      id: `snap_${uid().slice(0, 8)}`,
+      createdAt: t,
+      updatedAt: t,
+      tags: [],
+      title: name.trim() || `${board.title} · ${fmtDate(t)}`,
+      boardId: board.id,
+      boardTitle: board.title,
+      vars: { ...board.vars },
+      ...(conn ? { conn: { id: conn.id, name: conn.name, ...(conn.alias ? { alias: conn.alias } : {}) } } : {}),
+      cells: cells.map((p) => p.cell),
+      cards: cells.map((p) => p.card),
+      results,
+    }
+    await upsertSnapshot(snap)
+    showToast(`"${snap.title}" 을 저장했습니다(카드 ${Object.keys(results).length} 장의 결과)`)
+  }
+
   const touchVar = useCallback((name: string) => setPicked((p) => (p.includes(name) ? p.filter((x) => x !== name) : p)), [])
   const setCardChecks = (cardId: string, c: boolean[]) => setChecks((all) => ({ ...all, [cardId]: c }))
 
@@ -210,6 +249,19 @@ function BoardView({ board }: { board: Board }) {
           <button type="button" className="btn primary" onClick={runAll} disabled={queryCards.length === 0}>
             ▶ 전부 조회
           </button>
+          <button type="button" className="btn" onClick={() => void saveSnapshot()} title="지금 변수 · 조회 결과를 그대로 저장합니다. 나중에 다시 조회하지 않고 봅니다">
+            📷 화면 저장
+          </button>
+          {snaps.length > 0 && (
+            <select className="input snap-select" value="" onChange={(e) => e.target.value && navigate(`/snapshot/${e.target.value}`)} aria-label="저장한 화면 열기">
+              <option value="">저장한 화면 {snaps.length}</option>
+              {snaps.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.title}
+                </option>
+              ))}
+            </select>
+          )}
           <Link className="btn" to={`/settings/board/${board.id}`}>
             ✎ 편집
           </Link>
