@@ -1,4 +1,5 @@
-import type { BoardCell } from '../types'
+// MCP 서버(server/mcp.ts)가 node 로 바로 불러 쓰므로 확장자를 적는다
+import type { BoardCell } from '../types.ts'
 
 /** 작업판 격자: 4 열, 칸 높이 1~2 */
 export const COLS = 4

@@ -70,7 +70,8 @@ npm run lint
 - **저장 위치**: `npm run dev` · `npm run preview` 로 켜면 개발 서버가 저장 폴더에 항목마다 JSON 파일 하나를 씁니다(`server/fileStore.ts`).
   - 폴더: 기본 `~/.workbench/data`. 환경 변수 `WORKBENCH_DATA` 로 바꿉니다. 서버를 켤 때 터미널에 `[file-store] 저장 폴더 …` 로 보입니다.
   - 모양: `<저장 폴더>/<boards|cards|commands|runbooks|runs|connections|envs|kv>/<id>.json`
-  - 앱을 켤 때 파일을 읽습니다. 파일을 직접 고친 뒤 새로고침하면 화면에 반영됩니다. 브라우저 · 주소가 달라도 같은 파일을 봅니다.
+  - 앱을 켤 때 파일을 읽습니다. 브라우저 · 주소가 달라도 같은 파일을 봅니다.
+  - 개발 서버(`npm run dev`)는 저장 폴더를 지켜봅니다. 다른 프로그램(MCP 서버 · 편집기)이 파일을 바꾸면 열어 둔 화면이 그 테이블을 바로 다시 읽습니다.
   - 설정과 AKG 읽기 토큰은 브라우저(IndexedDB)에만 둡니다.
   - 파일에 쓰지 못한 변경(서버가 꺼졌을 때 등)은 다음에 켤 때 파일에 합칩니다. `updatedAt` 이 더 새로운 쪽을 남깁니다. 그동안 지운 항목은 파일에 남아 다시 보입니다.
   - `dist/index.html` 을 `file://` 로 열거나 GitHub Pages 에서는 개발 서버가 없으므로 브라우저의 IndexedDB(`workbench` DB)에만 저장합니다.
@@ -81,6 +82,37 @@ npm run lint
 - **팀 공유 방법**: 내보낸 JSON을 이 저장소의 `data/` 폴더에 커밋하고, 팀원은 파일을 받아 **가져오기(병합)** 합니다. 변경 이력과 리뷰는 Git으로 관리합니다.
 - **시드 데이터**: 첫 실행 때만 들어갑니다. 이미 사용 중인 브라우저에서 새 예시(서버 셋업 등)를 보려면 설정 → **시드 데이터로 초기화**를 누르세요. 기존 데이터는 모두 삭제되니 먼저 백업하세요.
 
+## agent 로 작업판 다루기 (MCP · skill)
+
+opencode 같은 agent 가 작업판을 만들고, 작업판의 SQL 로 화면과 같은 데이터를 다시 조회해 분석합니다.
+
+- **MCP 서버**: `server/mcp.ts`(stdio). 개발 서버와 같은 저장 폴더를 읽고 씁니다. Node 22.18 이상이 타입을 지우고 바로 돌립니다(`npm run mcp`).
+  - 도구: `list_boards` · `list_connections` · `get_board` · `create_board` · `add_cards` · `update_card` · `update_board`. 지우는 도구는 없습니다.
+  - `get_board` 는 카드마다 SQL · 바인드 값 · 연결의 agent-db alias 를 줍니다. agent 는 agent-db MCP 의 `run_query` 로 같은 데이터를 받습니다.
+  - 환경 변수: `WORKBENCH_DATA`(저장 폴더, 개발 서버와 같게) · `WORKBENCH_URL`(작업판 링크의 화면 주소, 기본 `http://127.0.0.1:5173`)
+- **skill**: `skills/workbench-board/SKILL.md`. 도구 쓰는 순서 · 카드 모양 · 그래프 종류별 열 · 바인드 규칙을 적었습니다. opencode 스킬 폴더(`~/.config/opencode/skills/` 또는 프로젝트의 `.opencode/skills/`)에 링크합니다.
+
+  ```bash
+  mkdir -p ~/.config/opencode/skills
+  ln -s ~/work/WorkBench/main/skills/workbench-board ~/.config/opencode/skills/workbench-board
+  ```
+
+- **opencode 설정 예**(`opencode.json`의 `mcp`):
+
+  ```json
+  {
+    "mcp": {
+      "workbench": {
+        "type": "local",
+        "command": ["node", "/home/<사용자>/work/WorkBench/main/server/mcp.ts"],
+        "environment": { "WORKBENCH_DATA": "/home/<사용자>/.workbench/data" }
+      }
+    }
+  }
+  ```
+
+  opencode 를 Windows 에서 띄우고 개발 서버를 WSL 에서 띄우면 두 쪽의 홈 폴더가 다릅니다. `WORKBENCH_DATA` 를 같은 폴더로 맞추세요.
+
 ## 폴더 구조
 
 ```text
@@ -88,6 +120,12 @@ WorkBench/
 ├─ index.html
 ├─ vite.config.ts            # base './', IIFE 번들(file:// 지원)
 ├─ public/favicon.svg
+├─ server/
+│  ├─ agentDb.ts            # /__agentdb/* → agent-db MCP(조회)
+│  ├─ fileStore.ts          # /__store/* → 저장 폴더 읽기 · 쓰기, 파일 바뀜 알림
+│  ├─ dataFiles.ts          # 저장 폴더 JSON 파일 다루기(fileStore · mcp 가 함께 씀)
+│  └─ mcp.ts                # WorkBench MCP 서버(작업판 읽기 · 만들기)
+├─ skills/workbench-board/  # agent 용 작업판 skill
 └─ src/
    ├─ main.tsx               # 진입점
    ├─ App.tsx                # HashRouter, 라우트, 초기화, 테마 적용
