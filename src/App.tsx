@@ -12,6 +12,7 @@ import Toolbox from './pages/Toolbox'
 import SettingsPage from './pages/Settings'
 import BoardEditPage from './pages/BoardEdit'
 import ConnectionsPage from './pages/Connections'
+import SnapshotPage from './pages/Snapshot'
 
 export default function App() {
   const ready = useStore((s) => s.ready)
@@ -37,6 +38,7 @@ export default function App() {
           <Route index element={<Dashboard />} />
           <Route path="board" element={<BoardPage />} />
           <Route path="board/:id" element={<BoardPage />} />
+          <Route path="snapshot/:id" element={<SnapshotPage />} />
           <Route path="akg" element={<AkgDocs />} />
           <Route path="cheatsheet" element={<Cheatsheet />} />
           <Route path="cheatsheet/:tool" element={<Cheatsheet />} />

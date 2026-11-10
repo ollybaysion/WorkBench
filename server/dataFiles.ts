@@ -12,7 +12,7 @@ import { join } from 'node:path'
 
 export const DATA_DIR = process.env.WORKBENCH_DATA || join(homedir(), '.workbench', 'data')
 
-export const TABLES = ['commands', 'runbooks', 'runs', 'envs', 'connections', 'cards', 'boards', 'kv'] as const
+export const TABLES = ['commands', 'runbooks', 'runs', 'envs', 'connections', 'cards', 'boards', 'snapshots', 'kv'] as const
 export type TableName = (typeof TABLES)[number]
 /** 브라우저에만 두는 kv 키 */
 const LOCAL_KV = new Set(['settings'])

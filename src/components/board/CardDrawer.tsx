@@ -21,7 +21,8 @@ interface Props {
   checks?: boolean[]
   onChecks: (checks: boolean[]) => void
   onClose: () => void
-  onRerun: () => void
+  /** 없으면 읽기 전용(저장한 화면) */
+  onRerun?: () => void
 }
 
 /** 카드 크게 보기. 화면 전체를 덮고, 고른 카드 자리에서 커지며 열린다. ✕ · Esc 로 닫힌다 */
@@ -53,9 +54,11 @@ export default function CardDrawer({ card, conn, run, boardVars, checks, onCheck
           <>
             {card.view.kind === 'chart' && <span className="pill gray">{card.view.type}</span>}
             <ConnTag conn={conn} />
-            <button type="button" className="btn small" onClick={onRerun} disabled={run?.status === 'loading'}>
-              ↻ 다시 조회
-            </button>
+            {onRerun && (
+              <button type="button" className="btn small" onClick={onRerun} disabled={run?.status === 'loading'}>
+                ↻ 다시 조회
+              </button>
+            )}
           </>
         ) : (
           cmd && <span className={`pill ${RISK_PILL[cmd.risk]}`}>{RISK_LABEL[cmd.risk]}</span>
@@ -85,7 +88,7 @@ function highlightBinds(sql: string): ReactNode[] {
   return out
 }
 
-function QueryDrawer({ card, run, boardVars, connName, onRerun }: { card: QueryCard; run?: QueryState; boardVars: Record<string, string>; connName?: string; onRerun: () => void }) {
+function QueryDrawer({ card, run, boardVars, connName, onRerun }: { card: QueryCard; run?: QueryState; boardVars: Record<string, string>; connName?: string; onRerun?: () => void }) {
   const binds = extractBinds(card.sql)
   const ok = run?.status === 'ok' ? run.result : undefined
   // 열이 많으면 행 카드로 먼저 연다

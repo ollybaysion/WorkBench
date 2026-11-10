@@ -165,6 +165,23 @@ export interface Board extends Base {
   connId?: string
 }
 
+/** 저장한 화면의 카드 결과. binds 는 그 조회에 넣은 바인드 값 */
+export type SnapResult = ({ status: 'ok'; result: QueryResult; at: string } | { status: 'error'; message: string; at: string }) & { binds?: Record<string, string> }
+
+/** 저장한 화면: 그 시각의 작업판(변수 · 연결 · 배치 · 카드 사본)과 조회 결과. 다시 조회하지 않고 읽기만 한다 */
+export interface BoardSnapshot extends Base {
+  title: string
+  boardId: string
+  boardTitle: string
+  vars: Record<string, string>
+  /** 그때 쓴 연결. 연결을 지워도 이름이 남는다 */
+  conn?: { id: string; name: string; alias?: string }
+  cells: BoardCell[]
+  cards: Card[]
+  /** 카드 id → 결과. 조회하지 않은 카드는 없다 */
+  results: Record<string, SnapResult>
+}
+
 export interface Column {
   name: string
   type: 'string' | 'number' | 'date'
@@ -192,6 +209,7 @@ export interface ExportBundle {
   connections?: Connection[]
   cards?: Card[]
   boards?: Board[]
+  snapshots?: BoardSnapshot[]
   // 예전 백업 파일에만 있다(지식 베이스 노트 · 업무 보드). 가져오기는 이 둘을 읽지 않는다
   notes?: unknown[]
   tasks?: unknown[]

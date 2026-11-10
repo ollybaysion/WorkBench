@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie'
-import type { Command, Runbook, RunbookRun, EnvPreset, Connection, Card, Board } from './types'
+import type { Command, Runbook, RunbookRun, EnvPreset, Connection, Card, Board, BoardSnapshot } from './types'
 import { fileMirror, setTableReader } from './lib/fileStore'
 
 export interface KV {
@@ -28,6 +28,7 @@ export class WorkBenchDB extends Dexie {
   connections!: Table<Connection, string>
   cards!: Table<Card, string>
   boards!: Table<Board, string>
+  snapshots!: Table<BoardSnapshot, string>
 
   constructor() {
     super('workbench')
@@ -40,6 +41,7 @@ export class WorkBenchDB extends Dexie {
     })
     // 카드가 연결 id 대신 연결 이름을 가리킨다. 그 뒤 카드의 연결은 작업판으로 옮겼다. 값 옮기기는 store.init 의 migrateConns 가 한다(가져오기 파일도 같은 길)
     this.version(3).stores({ cards: 'id, kind, connection, updatedAt' })
+    this.version(4).stores({ snapshots: 'id, boardId, updatedAt' })
     // 쓰기를 파일 저장소(npm run dev)에도 쓴다. lib/fileStore.ts
     this.use(fileMirror)
   }

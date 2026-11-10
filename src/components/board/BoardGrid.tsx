@@ -13,7 +13,8 @@ interface Props {
   runs: Record<string, QueryState>
   /** 조회한 뒤 변수 · alias · SQL 이 바뀐 카드 */
   stale: Record<string, boolean>
-  onRun: (card: QueryCard) => void
+  /** 없으면 읽기 전용(저장한 화면). 조회 단추를 숨긴다 */
+  onRun?: (card: QueryCard) => void
   boardVars: Record<string, string>
   checks: Record<string, boolean[]>
   onChecks: (cardId: string, checks: boolean[]) => void
@@ -34,7 +35,7 @@ export default function BoardGrid({ cells, runs, stale, onRun, boardVars, checks
               card={card}
               run={runs[card.id]}
               stale={!!stale[card.id]}
-              onRun={() => onRun(card)}
+              onRun={onRun && (() => onRun(card))}
               selected={card.id === selectedId}
               vars={boardVars}
               onOpen={() => onOpen(card.id)}
