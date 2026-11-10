@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useStore } from '../store'
 import { relTime } from '../lib/util'
 import { CHEATSHEETS } from '../lib/cheatsheets'
@@ -18,6 +18,16 @@ export default function Layout() {
   const settings = useStore((s) => s.settings)
   const setSettings = useStore((s) => s.setSettings)
   const toast = useStore((s) => s.toast)
+  const createBoard = useStore((s) => s.createBoard)
+  const showToast = useStore((s) => s.showToast)
+  const navigate = useNavigate()
+
+  // 빈 작업판을 만들고 편집 화면으로 간다. 이름 바꾸기 · 카드 올리기는 편집 화면에서 한다
+  const addBoard = async () => {
+    const b = await createBoard()
+    showToast(`"${b.title}" 을 만들었습니다`)
+    navigate(`/settings/board/${b.id}`)
+  }
 
   const cls = ({ isActive }: { isActive: boolean }) => 'nav-item' + (isActive ? ' active' : '')
   const nextTheme = THEMES[(THEMES.indexOf(settings.theme) + 1) % THEMES.length]
@@ -48,6 +58,9 @@ export default function Layout() {
               <span className="n">{b.cells.length}</span>
             </NavLink>
           ))}
+        <button type="button" className="nav-item sub nav-add" onClick={() => void addBoard()}>
+          + 새 작업판
+        </button>
         <NavLink to="/akg" className={cls}>📖 AKG 문서</NavLink>
         <NavLink to="/commands" className={cls}>⌘ 명령어 <span className="n">{commands}</span></NavLink>
         <NavLink to="/runbooks" className={cls}>🔁 런북 <span className="n">{runbooks}</span></NavLink>

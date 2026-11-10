@@ -3,7 +3,7 @@ import { db } from './db'
 import type { Command, Runbook, RunbookRun, EnvPreset, Settings, ExportBundle, Connection, Card, Board } from './types'
 import { seedCommands, seedEnvs, seedRunbooks } from './lib/seed'
 import { seedBoardCommands, seedBoards, seedCards, seedConnections, seedFdcBoard, seedFdcCards, seedFdcConnections, seedTsumBoard, seedTsumCards } from './lib/seedBoard'
-import { now } from './lib/util'
+import { now, uid } from './lib/util'
 import { migrateBoards, migrateCards } from './lib/conn'
 
 const defaultSettings: Settings = { theme: 'system', userName: '', activeEnvId: 'env_prod' }
@@ -39,6 +39,8 @@ interface State {
   upsertCard: (c: Card) => Promise<void>
   deleteCard: (id: string) => Promise<void>
   upsertBoard: (b: Board) => Promise<void>
+  /** 빈 작업판을 만든다. 이름은 "새 작업판", 겹치면 뒤에 번호를 붙인다 */
+  createBoard: () => Promise<Board>
   deleteBoard: (id: string) => Promise<void>
 
   activeEnv: () => EnvPreset | undefined
@@ -251,6 +253,16 @@ export const useStore = create<State>((set, get) => ({
     b = { ...b, updatedAt: now() }
     await db.boards.put(b)
     set({ boards: sortByUpdated([b, ...get().boards.filter((x) => x.id !== b.id)]) })
+  },
+  createBoard: async () => {
+    const titles = new Set(get().boards.map((b) => b.title))
+    let title = '새 작업판'
+    for (let n = 2; titles.has(title); n++) title = `새 작업판 ${n}`
+    const t = now()
+    const b: Board = { id: `board_${uid().slice(0, 8)}`, createdAt: t, updatedAt: t, tags: [], title, cells: [], vars: {} }
+    await db.boards.put(b)
+    set({ boards: sortByUpdated([b, ...get().boards]) })
+    return b
   },
   deleteBoard: async (id) => {
     await db.boards.delete(id)
