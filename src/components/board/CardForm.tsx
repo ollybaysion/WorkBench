@@ -125,7 +125,9 @@ function problemOf(d: Draft, cmdIds: string[]): string | undefined {
   if (!d.title.trim()) return '제목을 넣으세요'
   if (d.kind === 'command') return cmdIds.includes(d.commandId) ? undefined : '명령을 고르세요'
   if (!d.sql.trim()) return 'SQL 을 넣으세요'
-  if (d.view === 'chart' && (!d.x.trim() || splitCols(d.y).length === 0)) return '그래프의 x 열과 y 열을 넣으세요'
+  if (d.view === 'chart' && splitCols(d.y).length === 0) return '그래프의 y 열을 넣으세요'
+  // 숫자 타일은 x 열을 비우면 y 열마다 타일 하나를 보인다
+  if (d.view === 'chart' && d.chartType !== 'stat' && !d.x.trim()) return '그래프의 x 열을 넣으세요'
   if (d.view === 'table' && (d.lcl.trim() || d.ucl.trim()) && !d.limValue.trim()) return '표는 한계와 견줄 값 열을 넣으세요'
   return undefined
 }
@@ -289,8 +291,9 @@ export default function CardForm({ card, isNew, size, boardVars, boardConn, onSa
                 </select>
               </label>
               <label className="field">
-                x 열
-                <input className="mono" value={d.x} onChange={(e) => set({ x: e.target.value })} placeholder="ts" spellCheck={false} />
+                {d.chartType === 'stat' ? 'x 열 (비우면 열마다 타일)' : 'x 열'}
+                <input className="mono" value={d.x} onChange={(e) => set({ x: e.target.value })} placeholder={d.chartType === 'stat' ? '비움 · eqp_id · ts' : 'ts'} spellCheck={false} />
+                {d.chartType === 'stat' && <span className="small muted">비우면 y 열마다 타일 하나(첫 행 값). 이름 열이면 행마다, 시간 열이면 시리즈마다 타일 하나.</span>}
               </label>
               <label className="field">
                 y 열 (쉼표로 여럿)
