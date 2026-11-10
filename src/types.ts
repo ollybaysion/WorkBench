@@ -77,6 +77,8 @@ export interface Settings {
   userName: string
   activeEnvId?: string
   lastBackupAt?: string
+  /** 왼쪽 패널을 아이콘 줄로 접는다(넓은 화면만) */
+  sideMini?: boolean
   /** AKG 지식 허브 주소. 끝 슬래시 없이 저장한다. 예 http://akg.fdc.localhost:8000 */
   akgUrl?: string
   /** AKG 개인 읽기 토큰(akgr_…). 비밀이므로 JSON 내보내기 · 가져오기에 싣지 않는다. */
